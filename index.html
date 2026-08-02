@@ -1,0 +1,229 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>Gully Score — Cricket Scorer</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- ===================== TOP BAR ===================== -->
+<header class="topbar">
+  <button id="menuBtn" class="icon-btn" aria-label="Menu">
+    <span class="bar"></span><span class="bar"></span><span class="bar"></span>
+  </button>
+  <div class="brand">GULLY<span>SCORE</span></div>
+  <button id="undoBtn" class="icon-btn undo-btn" aria-label="Undo last ball" title="Undo last ball">↺</button>
+</header>
+
+<!-- ===================== SIDE MENU ===================== -->
+<div id="sideOverlay" class="overlay hidden"></div>
+<nav id="sideMenu" class="side-menu">
+  <div class="side-menu-header">
+    <span>Menu</span>
+    <button id="sideCloseBtn" class="side-close" aria-label="Close menu">✕</button>
+  </div>
+  <div id="sideSnapshot" class="side-snapshot hidden">
+    <strong id="snapTeam">—</strong>
+    <span id="snapScore">—</span>
+  </div>
+  <div class="side-items">
+    <button class="side-item" data-action="new-match"><span class="side-icon">🏏</span> New Match</button>
+    <button class="side-item" data-action="players"><span class="side-icon">👥</span> Players &amp; Rename</button>
+    <button class="side-item" data-action="switch-innings"><span class="side-icon">🔁</span> Switch / End Innings</button>
+    <button class="side-item danger" data-action="reset"><span class="side-icon">🗑️</span> Reset Everything</button>
+  </div>
+</nav>
+
+<!-- ===================== SCREEN 1: SETUP ===================== -->
+<section id="setupScreen" class="screen active">
+  <div class="card">
+    <h1>Start New Match</h1>
+
+    <label class="field-label">Team A name</label>
+    <input id="teamAName" type="text" placeholder="Team A" value="Team A">
+
+    <label class="field-label">Team B name</label>
+    <input id="teamBName" type="text" placeholder="Team B" value="Team B">
+
+    <label class="field-label">Players per side</label>
+    <div class="stepper">
+      <button id="playerMinus" class="stepper-btn">−</button>
+      <span id="playerCount">11</span>
+      <button id="playerPlus" class="stepper-btn">+</button>
+    </div>
+
+    <label class="field-label">Overs (optional, for reference)</label>
+    <input id="oversLimit" type="number" min="1" placeholder="e.g. 10 (leave blank for no limit)">
+
+    <button id="startMatchBtn" class="primary-btn">Start Match →</button>
+  </div>
+</section>
+
+<!-- ===================== SCREEN 2: PLAYER LIST ===================== -->
+<section id="playerScreen" class="screen">
+  <div class="screen-header">
+    <button class="back-btn" data-back="setupScreen">←</button>
+    <h2 id="playerScreenTitle">Players</h2>
+  </div>
+  <div id="playerListWrap" class="player-list"></div>
+  <button id="playersDoneBtn" class="primary-btn sticky-bottom">Done — Go to Scoring →</button>
+</section>
+
+<!-- ===================== SCREEN 3: MAIN SCORING ===================== -->
+<section id="matchScreen" class="screen">
+
+  <!-- Scoreboard -->
+  <div class="scoreboard">
+    <div class="innings-tag" id="inningsTag">1st Innings</div>
+    <div class="batting-team" id="battingTeamName">Team A</div>
+    <div class="score-row">
+      <span id="mainScore">0/0</span>
+      <span class="overs" id="mainOvers">(0.0 ov)</span>
+    </div>
+    <div class="sub-row">
+      <span id="crr">CRR: 0.00</span>
+      <span id="targetInfo" class="hidden"></span>
+    </div>
+    <div class="extras-row" id="extrasRow">Extras: 0 (WD 0, NB 0)</div>
+  </div>
+
+  <!-- Batsmen -->
+  <div class="batsmen-box">
+    <div class="batsman on-strike" id="strikerBox">
+      <span class="bat-name" id="strikerName">Player 1</span>
+      <span class="bat-stats" id="strikerStats">0 (0)</span>
+      <span class="strike-dot">🏏</span>
+    </div>
+    <div class="batsman" id="nonStrikerBox">
+      <span class="bat-name" id="nonStrikerName">Player 2</span>
+      <span class="bat-stats" id="nonStrikerStats">0 (0)</span>
+    </div>
+  </div>
+
+  <!-- Bowler -->
+  <div class="bowler-box" id="bowlerBox">
+    <span>Bowler: <strong id="bowlerName">—</strong></span>
+    <button id="changeBowlerBtn" class="mini-btn">Change</button>
+  </div>
+
+  <!-- This over -->
+  <div class="this-over">
+    <span class="this-over-label">This over:</span>
+    <div id="thisOverBalls" class="this-over-balls"></div>
+  </div>
+
+  <!-- Status banner (innings over / match over) -->
+  <div id="statusBanner" class="status-banner hidden">
+    <p id="statusBannerText"></p>
+    <button id="statusBannerBtn" class="primary-btn small-btn">Continue</button>
+  </div>
+
+  <!-- Scoring pad -->
+  <div class="pad">
+    <div class="run-grid">
+      <button class="run-btn" data-run="0">0</button>
+      <button class="run-btn" data-run="1">1</button>
+      <button class="run-btn" data-run="2">2</button>
+      <button class="run-btn" data-run="3">3</button>
+      <button class="run-btn boundary" data-run="4">4</button>
+      <button class="run-btn" data-run="5">5</button>
+      <button class="run-btn boundary six" data-run="6">6</button>
+      <button class="run-btn plus" id="plusBtn">+</button>
+    </div>
+    <div class="extra-grid">
+      <button class="extra-btn wide" id="wideBtn">WIDE</button>
+      <button class="extra-btn noball" id="noballBtn">NO BALL</button>
+      <button class="extra-btn declare" id="declareBtn">RUN<br>DECLARE</button>
+      <button class="extra-btn out" id="outBtn">OUT</button>
+    </div>
+  </div>
+</section>
+
+<!-- ===================== MODAL: CUSTOM RUNS ===================== -->
+<div id="customRunModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>Enter Runs</h3>
+    <input id="customRunInput" type="number" min="0" placeholder="e.g. 7">
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="customRunModal">Cancel</button>
+      <button class="primary-btn" id="customRunConfirm">Add Runs</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: RUN DECLARE ===================== -->
+<div id="declareModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>Declare Runs</h3>
+    <p class="modal-hint">Adds runs to score. Ball &amp; strike stay unchanged.</p>
+    <input id="declareRunInput" type="number" min="0" placeholder="e.g. 6">
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="declareModal">Cancel</button>
+      <button class="primary-btn" id="declareConfirm">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: OUT TYPE ===================== -->
+<div id="outModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>How Out?</h3>
+    <div class="out-type-grid">
+      <button class="out-type-btn" data-out="Bowled">Bowled</button>
+      <button class="out-type-btn" data-out="Caught">Caught</button>
+      <button class="out-type-btn" data-out="Run Out">Run Out</button>
+      <button class="out-type-btn" data-out="LBW">LBW</button>
+      <button class="out-type-btn" data-out="Stumped">Stumped</button>
+      <button class="out-type-btn" data-out="Hit Wicket">Hit Wicket</button>
+    </div>
+    <div id="runOutRunsWrap" class="hidden">
+      <label class="field-label">Runs completed before run-out</label>
+      <input id="runOutRuns" type="number" min="0" value="0">
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="outModal">Cancel</button>
+      <button class="primary-btn" id="outConfirm" disabled>Confirm Out</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: NEXT BATSMAN ===================== -->
+<div id="nextBatModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>Select Next Batsman</h3>
+    <div id="nextBatList" class="next-bat-list"></div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: CHANGE BOWLER ===================== -->
+<div id="bowlerModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>Select Bowler</h3>
+    <input id="bowlerNameInput" type="text" placeholder="Enter bowler name">
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="bowlerModal">Cancel</button>
+      <button class="primary-btn" id="bowlerConfirm">Set Bowler</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: CONFIRM RESET ===================== -->
+<div id="confirmModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3 id="confirmTitle">Are you sure?</h3>
+    <p class="modal-hint" id="confirmText"></p>
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="confirmModal">Cancel</button>
+      <button class="danger-btn" id="confirmYes">Yes, do it</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== TOAST ===================== -->
+<div id="toast" class="toast hidden"></div>
+
+<script src="script.js"></script>
+</body>
+</html>
