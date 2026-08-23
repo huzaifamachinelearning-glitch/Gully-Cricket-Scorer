@@ -3,12 +3,13 @@
    All logic lives here: state, scoring rules, undo, rendering.
    ========================================================= */
 
-const STORAGE_KEY = 'gullyscore_state_v1';
+const STORAGE_KEY = 'gullyscore_state_v2';
 
 let state = null;
 let uiFlow = 'new';          // 'new' | 'rename' | 'switch'  -> controls Player-screen buttons
-let pendingOutType = null;
-let matchInitializedOnce = false;
+let selectedOutType = null;
+let pendingByeType = null;
+let confirmCallback = null;
 
 /* ---------------- DEFAULT STATE ---------------- */
 function defaultState(){
@@ -20,20 +21,29 @@ function defaultState(){
     matchStarted: false,
     innings: 1,
     battingTeamName: 'Team A',
+    bowlingTeamName: 'Team B',
     players: [],                 // {name, runs, balls, out, howOut}
     strikerIdx: 0,
     nonStrikerIdx: 1,
     bowlerName: '',
+    bowlerStats: {},             // name -> {balls, runs, wickets}
     totalRuns: 0,
     wickets: 0,
     legalBalls: 0,                // balls bowled in current over (0-5)
     totalLegalBalls: 0,
-    extras: { wide: 0, noball: 0 },
+    extras: { wide: 0, noball: 0, bye: 0, legbye: 0 },
     thisOverEvents: [],
+    currentOverRuns: 0,
+    currentOverWickets: 0,
+    freeHit: false,
     target: null,
-    firstInningsSummary: null,    // {teamName, runs, wickets, oversStr}
+    firstInningsSummary: null,
     matchOver: false,
     inningsOver: false,
+    inningsFlashShown: false,
+    matchFlashShown: false,
+    pendingOverFlash: null,
+    log: [],                      // ball-by-ball commentary
     history: []                   // undo stack (snapshots without 'history' field)
   };
 }
@@ -65,6 +75,8 @@ function undo(){
   state = prev;
   state.history = hist;
   toast('Undone last ball');
+  $('overFlash').classList.add('hidden');
+  $('inningsFlash').classList.add('hidden');
   renderMatchScreen();
   saveState();
 }
@@ -88,6 +100,24 @@ function closeModal(id){ $(id).classList.add('hidden'); }
 document.querySelectorAll('[data-close]').forEach(btn=>{
   btn.addEventListener('click', ()=> closeModal(btn.dataset.close));
 });
+document.querySelectorAll('[data-back]').forEach(btn=>{
+  btn.addEventListener('click', ()=> showScreen(btn.dataset.back));
+});
+
+function ensureBowlerStats(name){
+  if(!state.bowlerStats[name]) state.bowlerStats[name] = { balls:0, runs:0, wickets:0 };
+  return state.bowlerStats[name];
+}
+function logEvent(text){
+  state.log.push({ text, over: oversStr(state.totalLegalBalls) });
+}
+function oversStr(balls){
+  return Math.floor(balls/6) + '.' + (balls%6);
+}
+function crr(){
+  if(state.totalLegalBalls === 0) return '0.00';
+  return (state.totalRuns / (state.totalLegalBalls/6)).toFixed(2);
+}
 
 /* ================================================================
    SETUP SCREEN
@@ -104,22 +134,40 @@ $('playerPlus').addEventListener('click', ()=>{
 });
 
 $('startMatchBtn').addEventListener('click', ()=>{
-  state = defaultState();
-  state.teamA = $('teamAName').value.trim() || 'Team A';
-  state.teamB = $('teamBName').value.trim() || 'Team B';
-  state.numPlayers = setupPlayerCount;
+  const teamA = $('teamAName').value.trim() || 'Team A';
+  const teamB = $('teamBName').value.trim() || 'Team B';
   const ov = parseInt($('oversLimit').value, 10);
-  state.oversLimit = isNaN(ov) ? null : ov;
-  state.battingTeamName = state.teamA;
+  if(isNaN(ov) || ov < 1){
+    toast('Overs zaroori hai — kitne overs ka match hai wo daalo');
+    $('oversLimit').focus();
+    return;
+  }
+  state = defaultState();
+  state.teamA = teamA;
+  state.teamB = teamB;
+  state.numPlayers = setupPlayerCount;
+  state.oversLimit = ov;
 
-  state.players = Array.from({length: setupPlayerCount}, (_, i)=>({
+  $('tossTeamABtn').textContent = teamA + ' bats first';
+  $('tossTeamBBtn').textContent = teamB + ' bats first';
+  showScreen('tossScreen');
+});
+
+/* ================================================================
+   TOSS SCREEN
+   ================================================================ */
+function chooseBattingTeam(name){
+  state.battingTeamName = name;
+  state.bowlingTeamName = (name === state.teamA) ? state.teamB : state.teamA;
+  state.players = Array.from({length: state.numPlayers}, (_, i)=>({
     name: 'Player ' + (i+1), runs: 0, balls: 0, out: false, howOut: ''
   }));
-
   uiFlow = 'new';
   renderPlayerScreen();
   showScreen('playerScreen');
-});
+}
+$('tossTeamABtn').addEventListener('click', ()=> chooseBattingTeam(state.teamA));
+$('tossTeamBBtn').addEventListener('click', ()=> chooseBattingTeam(state.teamB));
 
 /* ================================================================
    PLAYER SCREEN (rename / add / remove)
@@ -188,14 +236,9 @@ $('playersDoneBtn').addEventListener('click', ()=>{
     showScreen('matchScreen');
     renderMatchScreen();
   } else {
-    // just renaming mid-match
     showScreen('matchScreen');
     renderMatchScreen();
   }
-});
-
-document.querySelectorAll('.back-btn').forEach(b=>{
-  b.addEventListener('click', ()=> showScreen(b.dataset.back));
 });
 
 function initMatchState(){
@@ -203,20 +246,14 @@ function initMatchState(){
   state.strikerIdx = 0;
   state.nonStrikerIdx = state.players.length > 1 ? 1 : 0;
   state.bowlerName = 'Bowler 1';
-  matchInitializedOnce = true;
+  ensureBowlerStats(state.bowlerName);
+  logEvent(state.battingTeamName + ' innings begins — ' + state.oversLimit + ' overs match');
   saveState();
 }
 
 /* ================================================================
    MATCH SCREEN — SCORING ENGINE
    ================================================================ */
-function oversStr(balls){
-  return Math.floor(balls/6) + '.' + (balls%6);
-}
-function crr(){
-  if(state.totalLegalBalls === 0) return '0.00';
-  return (state.totalRuns / (state.totalLegalBalls/6)).toFixed(2);
-}
 function swapStrike(){
   const t = state.strikerIdx; state.strikerIdx = state.nonStrikerIdx; state.nonStrikerIdx = t;
 }
@@ -226,12 +263,18 @@ function rotateStrikeIfOdd(runs){
 function addBallChip(label, type){
   state.thisOverEvents.push({label, type});
 }
-function completeOverIfNeeded(){
+function maybeCompleteOver(){
   if(state.legalBalls === 6){
+    const overNum = Math.floor(state.totalLegalBalls/6);
+    const runsThisOver = state.currentOverRuns;
+    const wktsThisOver = state.currentOverWickets;
     state.legalBalls = 0;
     state.thisOverEvents = [];
+    state.currentOverRuns = 0;
+    state.currentOverWickets = 0;
     swapStrike();
-    toast('Over complete — strike changed');
+    logEvent('— End of Over ' + overNum + ': ' + runsThisOver + ' run(s), ' + wktsThisOver + ' wicket(s). Strike changes. —');
+    state.pendingOverFlash = { overNum, runsThisOver, wktsThisOver };
   }
 }
 
@@ -242,24 +285,62 @@ function checkMatchStatus(){
   if(state.innings === 1){
     if((allOut || oversDone) && !state.inningsOver){
       state.inningsOver = true;
-      toast('Innings over! Open menu → Switch Innings');
+      logEvent('Innings over: ' + state.totalRuns + '/' + state.wickets + ' in ' + oversStr(state.totalLegalBalls) + ' overs');
     }
   } else {
-    if(state.target !== null && state.totalRuns >= state.target){
+    if(state.target !== null && state.totalRuns >= state.target && !state.matchOver){
       state.matchOver = true;
-      toast('🏆 ' + state.battingTeamName + ' won the match!');
+      logEvent('Match won! ' + matchOverText());
     } else if((allOut || oversDone) && !state.matchOver){
       state.matchOver = true;
-      const diff = state.target - 1 - state.totalRuns;
-      if(diff === 0) toast('Match tied!');
-      else toast('🏆 Match over! ' + state.battingTeamName + ' fell short by ' + diff + ' run(s)');
+      logEvent('Match over. ' + matchOverText());
     }
   }
 }
 
+function matchOverText(){
+  if(state.totalRuns >= state.target){
+    const wLeft = state.players.length - 1 - state.wickets;
+    return '🏆 ' + state.battingTeamName + ' won by ' + wLeft + ' wicket(s)!';
+  }
+  const diff = state.target - 1 - state.totalRuns;
+  if(diff === 0) return '🤝 Match Tied!';
+  const winner = (state.battingTeamName === state.teamA) ? state.teamB : state.teamA;
+  return '🏆 ' + winner + ' won by ' + diff + ' run(s)!';
+}
+
+/* ---- Central post-ball flow: save, then decide what to show ---- */
+function finishBall(){
+  checkMatchStatus();
+  handlePostBallUI();
+}
+function handlePostBallUI(){
+  saveState();
+  if(state.matchOver && !state.matchFlashShown){
+    state.matchFlashShown = true;
+    saveState();
+    showInningsFlash(true);
+    return;
+  }
+  if(state.inningsOver && !state.inningsFlashShown){
+    state.inningsFlashShown = true;
+    saveState();
+    showInningsFlash(false);
+    return;
+  }
+  if(state.pendingOverFlash){
+    const info = state.pendingOverFlash;
+    state.pendingOverFlash = null;
+    saveState();
+    showOverFlash(info);
+    return;
+  }
+  renderMatchScreen();
+}
+
 /* ---- Normal legal delivery (0-6 runs or custom) ---- */
 function playLegalDelivery(runs){
-  if(state.matchOver){ toast('Match is over'); return; }
+  if(state.matchOver || state.inningsOver){ toast('Innings/Match is over'); return; }
   pushHistory();
   const striker = state.players[state.strikerIdx];
   striker.balls++;
@@ -267,58 +348,103 @@ function playLegalDelivery(runs){
   state.totalRuns += runs;
   state.legalBalls++;
   state.totalLegalBalls++;
+  state.currentOverRuns += runs;
+  const bs = ensureBowlerStats(state.bowlerName);
+  bs.balls++; bs.runs += runs;
   addBallChip(String(runs), runs>=4 ? 'boundary' : 'normal');
+  logEvent(striker.name + ' scores ' + runs + (runs===6?' — SIX! 🎉':(runs===4?' — FOUR!':' run(s)')));
+  state.freeHit = false;
   rotateStrikeIfOdd(runs);
-  completeOverIfNeeded();
-  checkMatchStatus();
-  renderMatchScreen();
-  saveState();
+  maybeCompleteOver();
+  finishBall();
 }
 
 /* ---- Wide ---- */
 function playWide(){
-  if(state.matchOver){ toast('Match is over'); return; }
+  if(state.matchOver || state.inningsOver){ toast('Innings/Match is over'); return; }
   pushHistory();
   state.totalRuns += 1;
   state.extras.wide += 1;
+  state.currentOverRuns += 1;
+  const bs = ensureBowlerStats(state.bowlerName);
+  bs.runs += 1;
   addBallChip('WD', 'extra');
-  checkMatchStatus();
-  renderMatchScreen();
-  saveState();
+  logEvent('Wide ball (+1 run)');
+  finishBall();
 }
 
 /* ---- No ball ---- */
 function playNoBall(){
-  if(state.matchOver){ toast('Match is over'); return; }
+  if(state.matchOver || state.inningsOver){ toast('Innings/Match is over'); return; }
   pushHistory();
   state.totalRuns += 1;
   state.extras.noball += 1;
+  state.currentOverRuns += 1;
+  const bs = ensureBowlerStats(state.bowlerName);
+  bs.runs += 1;
   addBallChip('NB', 'extra');
-  checkMatchStatus();
-  renderMatchScreen();
-  saveState();
+  state.freeHit = true;
+  logEvent('No ball (+1 run) — next ball is FREE HIT');
+  finishBall();
+}
+
+/* ---- Bye / Leg Bye (legal ball, runs to extras not batsman) ---- */
+function playByeType(type, runs){
+  if(state.matchOver || state.inningsOver){ toast('Innings/Match is over'); return; }
+  pushHistory();
+  const striker = state.players[state.strikerIdx];
+  striker.balls++;
+  state.totalRuns += runs;
+  state.extras[type === 'Bye' ? 'bye' : 'legbye'] += runs;
+  state.legalBalls++;
+  state.totalLegalBalls++;
+  state.currentOverRuns += runs;
+  const bs = ensureBowlerStats(state.bowlerName);
+  bs.balls++;
+  addBallChip((type==='Bye'?'B':'LB') + runs, 'extra');
+  logEvent(type + ': +' + runs + ' run(s)');
+  state.freeHit = false;
+  rotateStrikeIfOdd(runs);
+  maybeCompleteOver();
+  finishBall();
 }
 
 /* ---- Run declare (no ball count, no strike change, no batsman credit) ---- */
 function playDeclare(runs){
-  if(state.matchOver){ toast('Match is over'); return; }
+  if(state.matchOver || state.inningsOver){ toast('Innings/Match is over'); return; }
   pushHistory();
   state.totalRuns += runs;
   addBallChip('D+'+runs, 'extra');
-  checkMatchStatus();
-  renderMatchScreen();
-  saveState();
+  logEvent('Runs declared: +' + runs);
+  finishBall();
 }
 
 /* ---- OUT handling ---- */
 function playOut(outType, runOutRuns){
-  if(state.matchOver){ toast('Match is over'); return; }
+  if(state.matchOver || state.inningsOver){ toast('Innings/Match is over'); return; }
   pushHistory();
   const striker = state.players[state.strikerIdx];
+
+  // Free-hit protection: any dismissal except run-out is voided
+  if(state.freeHit && outType !== 'Run Out'){
+    striker.balls++;
+    state.legalBalls++;
+    state.totalLegalBalls++;
+    const bs = ensureBowlerStats(state.bowlerName);
+    bs.balls++;
+    addBallChip('•', 'normal');
+    logEvent('FREE HIT — ' + outType + ' attempt, batsman NOT out');
+    state.freeHit = false;
+    maybeCompleteOver();
+    toast('Free Hit! No wicket (except run out)');
+    finishBall();
+    return;
+  }
 
   if(outType === 'Run Out' && runOutRuns > 0){
     striker.runs += runOutRuns;
     state.totalRuns += runOutRuns;
+    state.currentOverRuns += runOutRuns;
   }
   striker.balls++;
   striker.out = true;
@@ -326,26 +452,28 @@ function playOut(outType, runOutRuns){
   state.wickets++;
   state.legalBalls++;
   state.totalLegalBalls++;
+  state.currentOverWickets++;
+  const bs = ensureBowlerStats(state.bowlerName);
+  bs.balls++;
+  if(outType !== 'Run Out') bs.wickets++;
+  if(outType === 'Run Out' && runOutRuns > 0) bs.runs += runOutRuns;
   addBallChip('W', 'wicket');
-
-  if(outType === 'Run Out'){
-    rotateStrikeIfOdd(runOutRuns || 0);
-  }
-  completeOverIfNeeded();
+  logEvent(striker.name + ' OUT (' + outType + ')' + (outType==='Run Out' && runOutRuns>0 ? ' +'+runOutRuns+' run(s)' : ''));
+  state.freeHit = false;
+  if(outType === 'Run Out') rotateStrikeIfOdd(runOutRuns || 0);
+  maybeCompleteOver();
   checkMatchStatus();
-  saveState();
 
-  // Need a new batsman unless all out
   const available = state.players
     .map((p, idx)=>({p, idx}))
     .filter(o => !o.p.out && o.idx !== state.nonStrikerIdx && o.idx !== state.strikerIdx);
 
   if(state.wickets >= state.players.length - 1 || available.length === 0){
-    renderMatchScreen();
-    return; // all out — checkMatchStatus already flagged innings/match over
+    handlePostBallUI();
+    return;
   }
   openNextBatModal(available);
-  renderMatchScreen();
+  saveState();
 }
 
 function openNextBatModal(available){
@@ -358,8 +486,7 @@ function openNextBatModal(available){
     item.addEventListener('click', ()=>{
       state.strikerIdx = idx;
       closeModal('nextBatModal');
-      renderMatchScreen();
-      saveState();
+      handlePostBallUI();
     });
     list.appendChild(item);
   });
@@ -368,7 +495,6 @@ function openNextBatModal(available){
 
 /* ---- Next innings ---- */
 function beginSwitchInnings(){
-  const allOut = state.wickets >= state.players.length - 1;
   if(state.innings === 2){
     toast('Match already in 2nd innings');
     return;
@@ -381,13 +507,17 @@ function beginSwitchInnings(){
   };
   state.target = state.totalRuns + 1;
   state.innings = 2;
-  state.battingTeamName = (state.battingTeamName === state.teamA) ? state.teamB : state.teamA;
+  const prevBatting = state.battingTeamName;
+  state.battingTeamName = state.bowlingTeamName;
+  state.bowlingTeamName = prevBatting;
 
   const n = state.players.length;
   state.players = Array.from({length:n}, (_,i)=>({name:'Player '+(i+1), runs:0, balls:0, out:false, howOut:''}));
 
   state.inningsOver = false;
   state.matchOver = false;
+  state.inningsFlashShown = false;
+  state.matchFlashShown = false;
   state.history = [];
   saveState();
 
@@ -399,13 +529,54 @@ function startNextInnings(){
   state.strikerIdx = 0;
   state.nonStrikerIdx = state.players.length > 1 ? 1 : 0;
   state.bowlerName = 'Bowler 1';
+  state.bowlerStats = {};
+  ensureBowlerStats(state.bowlerName);
   state.totalRuns = 0;
   state.wickets = 0;
   state.legalBalls = 0;
   state.totalLegalBalls = 0;
-  state.extras = { wide:0, noball:0 };
+  state.extras = { wide:0, noball:0, bye:0, legbye:0 };
   state.thisOverEvents = [];
+  state.currentOverRuns = 0;
+  state.currentOverWickets = 0;
+  state.freeHit = false;
+  state.pendingOverFlash = null;
+  logEvent(state.battingTeamName + ' innings begins — target: ' + state.target + ' runs');
   saveState();
+}
+
+/* ---- Over / Innings flash cards ---- */
+function showOverFlash(info){
+  $('overFlashNum').textContent = 'Over ' + info.overNum;
+  $('overFlashRuns').textContent = info.runsThisOver + ' run' + (info.runsThisOver===1?'':'s');
+  $('overFlashSub').textContent = info.wktsThisOver + ' wicket' + (info.wktsThisOver===1?'':'s');
+  $('overFlashScore').textContent = 'Score: ' + state.totalRuns + '/' + state.wickets;
+  $('overFlash').classList.remove('hidden');
+  clearTimeout(showOverFlash._t);
+  showOverFlash._t = setTimeout(hideOverFlash, 2600);
+}
+function hideOverFlash(){
+  $('overFlash').classList.add('hidden');
+  renderMatchScreen();
+}
+$('overFlashContinue').addEventListener('click', ()=>{ clearTimeout(showOverFlash._t); hideOverFlash(); });
+
+function showInningsFlash(isMatchOver){
+  $('inningsFlashTeam').textContent = isMatchOver ? matchOverText() : (state.battingTeamName + ' — Innings Complete');
+  $('inningsFlashScore').textContent = state.totalRuns + '/' + state.wickets;
+  $('inningsFlashOvers').textContent = oversStr(state.totalLegalBalls) + ' overs';
+  $('inningsFlash').classList.remove('hidden');
+}
+function hideInningsFlash(){
+  $('inningsFlash').classList.add('hidden');
+  renderMatchScreen();
+}
+$('inningsFlashContinue').addEventListener('click', hideInningsFlash);
+
+function resetToSetup(){
+  localStorage.removeItem(STORAGE_KEY);
+  state = defaultState();
+  showScreen('setupScreen');
 }
 
 /* ================================================================
@@ -429,8 +600,11 @@ function renderMatchScreen(){
     $('targetInfo').classList.add('hidden');
   }
 
-  $('extrasRow').textContent = 'Extras: ' + (state.extras.wide + state.extras.noball) +
-    ' (WD ' + state.extras.wide + ', NB ' + state.extras.noball + ')';
+  const totalExtras = state.extras.wide + state.extras.noball + state.extras.bye + state.extras.legbye;
+  $('extrasRow').textContent = 'Extras: ' + totalExtras +
+    ' (WD ' + state.extras.wide + ', NB ' + state.extras.noball + ', B ' + state.extras.bye + ', LB ' + state.extras.legbye + ')';
+
+  $('freeHitBadge').classList.toggle('hidden', !state.freeHit);
 
   const striker = state.players[state.strikerIdx];
   const nonStriker = state.players[state.nonStrikerIdx];
@@ -440,6 +614,8 @@ function renderMatchScreen(){
   $('nonStrikerStats').textContent = nonStriker ? (nonStriker.runs + ' (' + nonStriker.balls + ')') : '';
 
   $('bowlerName').textContent = state.bowlerName || '—';
+  const bs = state.bowlerStats[state.bowlerName];
+  $('bowlerFigures').textContent = bs ? ('(' + oversStr(bs.balls) + ' ov, ' + bs.runs + ' runs, ' + bs.wickets + ' wkt)') : '';
 
   const chipsWrap = $('thisOverBalls');
   chipsWrap.innerHTML = '';
@@ -450,22 +626,10 @@ function renderMatchScreen(){
     chipsWrap.appendChild(c);
   });
 
-  // hard stop: disable pad once innings/match limit is reached
   const shouldDisable = !!(state.matchOver || state.inningsOver);
   document.querySelectorAll('.run-btn, .extra-btn').forEach(b => b.disabled = shouldDisable);
 
   renderStatusBanner();
-}
-
-function matchOverText(){
-  if(state.totalRuns >= state.target){
-    const wLeft = state.players.length - 1 - state.wickets;
-    return '🏆 ' + state.battingTeamName + ' won by ' + wLeft + ' wicket(s)!';
-  }
-  const diff = state.target - 1 - state.totalRuns;
-  if(diff === 0) return '🤝 Match Tied!';
-  const winner = (state.battingTeamName === state.teamA) ? state.teamB : state.teamA;
-  return '🏆 ' + winner + ' won by ' + diff + ' run(s)!';
 }
 
 function renderStatusBanner(){
@@ -486,12 +650,6 @@ function renderStatusBanner(){
   } else {
     banner.classList.add('hidden');
   }
-}
-
-function resetToSetup(){
-  localStorage.removeItem(STORAGE_KEY);
-  state = defaultState();
-  showScreen('setupScreen');
 }
 
 /* ---- Pad buttons ---- */
@@ -526,8 +684,32 @@ $('declareConfirm').addEventListener('click', ()=>{
   playDeclare(v);
 });
 
+/* ---- More extras: Bye / Leg Bye ---- */
+$('moreExtrasToggle').addEventListener('click', ()=>{
+  const row = $('moreExtrasRow');
+  row.classList.toggle('hidden');
+  $('moreExtrasToggle').textContent = row.classList.contains('hidden') ? '⋯ More Extras (Bye / Leg Bye)' : '▲ Hide Extras';
+});
+$('byeBtn').addEventListener('click', ()=>{
+  pendingByeType = 'Bye';
+  $('byeModalTitle').textContent = 'Bye Runs';
+  $('byeRunInput').value = '';
+  openModal('byeModal');
+});
+$('legbyeBtn').addEventListener('click', ()=>{
+  pendingByeType = 'Leg Bye';
+  $('byeModalTitle').textContent = 'Leg Bye Runs';
+  $('byeRunInput').value = '';
+  openModal('byeModal');
+});
+$('byeConfirm').addEventListener('click', ()=>{
+  const v = parseInt($('byeRunInput').value, 10);
+  if(isNaN(v) || v < 1){ toast('Enter runs (1 or more)'); return; }
+  closeModal('byeModal');
+  playByeType(pendingByeType, v);
+});
+
 /* ---- Out modal ---- */
-let selectedOutType = null;
 document.querySelectorAll('.out-type-btn').forEach(btn=>{
   btn.addEventListener('click', ()=>{
     document.querySelectorAll('.out-type-btn').forEach(b=>b.classList.remove('selected'));
@@ -554,12 +736,16 @@ $('outConfirm').addEventListener('click', ()=>{
 
 /* ---- Bowler ---- */
 $('changeBowlerBtn').addEventListener('click', ()=>{
-  $('bowlerNameInput').value = state.bowlerName || '';
+  $('bowlerNameInput').value = '';
   openModal('bowlerModal');
 });
 $('bowlerConfirm').addEventListener('click', ()=>{
   const v = $('bowlerNameInput').value.trim();
-  state.bowlerName = v || state.bowlerName;
+  if(v){
+    state.bowlerName = v;
+    ensureBowlerStats(v);
+    logEvent('Bowling change: ' + v);
+  }
   closeModal('bowlerModal');
   renderMatchScreen();
   saveState();
@@ -589,6 +775,26 @@ function closeSideMenu(){
   $('sideMenu').classList.remove('open');
 }
 
+function renderHistoryList(){
+  const wrap = $('historyList');
+  wrap.innerHTML = '';
+  if(!state.log || state.log.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'history-item';
+    empty.textContent = 'No events yet.';
+    wrap.appendChild(empty);
+    return;
+  }
+  state.log.forEach(entry=>{
+    const div = document.createElement('div');
+    div.className = 'history-item';
+    const s1 = document.createElement('span'); s1.textContent = entry.text;
+    const s2 = document.createElement('span'); s2.className = 'h-time'; s2.textContent = entry.over;
+    div.appendChild(s1); div.appendChild(s2);
+    wrap.appendChild(div);
+  });
+}
+
 document.querySelectorAll('.side-item').forEach(item=>{
   item.addEventListener('click', ()=>{
     closeSideMenu();
@@ -600,18 +806,19 @@ document.querySelectorAll('.side-item').forEach(item=>{
       uiFlow = 'rename';
       renderPlayerScreen();
       showScreen('playerScreen');
+    } else if(action === 'history'){
+      if(!state || !state.matchStarted){ toast('Start a match first'); return; }
+      renderHistoryList();
+      openModal('historyModal');
     } else if(action === 'switch-innings'){
       if(!state || !state.matchStarted){ toast('Start a match first'); return; }
-      confirmAction('End this innings?', 'Current score will be locked and a new innings will start.', ()=>{
-        beginSwitchInnings();
-      });
+      confirmAction('End this innings?', 'Current score will be locked and a new innings will start.', beginSwitchInnings);
     } else if(action === 'reset'){
       confirmAction('Reset everything?', 'All match data will be permanently deleted.', resetToSetup);
     }
   });
 });
 
-let confirmCallback = null;
 function confirmAction(title, text, cb){
   $('confirmTitle').textContent = title;
   $('confirmText').textContent = text;
@@ -632,6 +839,10 @@ window.addEventListener('DOMContentLoaded', ()=>{
   if(saved && saved.matchStarted){
     state = saved;
     if(!state.history) state.history = [];
+    if(!state.log) state.log = [];
+    if(!state.bowlerStats) state.bowlerStats = {};
+    if(!state.extras.bye) state.extras.bye = 0;
+    if(!state.extras.legbye) state.extras.legbye = 0;
     showScreen('matchScreen');
     renderMatchScreen();
   } else {

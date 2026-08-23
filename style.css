@@ -326,6 +326,72 @@ input:focus{outline:none; border-color:var(--orange);}
   font-size:14px; font-weight:500; z-index:200; box-shadow:0 6px 20px rgba(0,0,0,0.25);
 }
 
+/* ================= SETUP EXTRAS ================= */
+.required-tag{
+  background:var(--red); color:white; font-size:10px; padding:2px 7px;
+  border-radius:20px; margin-left:8px; letter-spacing:0.03em; vertical-align:middle;
+}
+.field-hint{font-size:12.5px; color:var(--ink-soft); margin-top:6px; line-height:1.4;}
+
+/* ================= TOSS SCREEN ================= */
+.toss-btn{
+  width:100%; padding:20px; margin-top:16px;
+  background:var(--white); border:2px solid var(--orange);
+  color:var(--orange-dark); font-family:'Oswald',sans-serif; font-size:18px; font-weight:700;
+  border-radius:14px; cursor:pointer;
+}
+.toss-btn:active{background:var(--orange); color:white; transform:scale(0.98);}
+.back-btn-text{
+  display:block; margin:20px auto 0; border:none; background:none;
+  color:var(--ink-soft); font-size:14px; font-weight:600; cursor:pointer;
+}
+
+/* ================= MATCH SCREEN EXTRAS ================= */
+.vs-tag{font-size:12px; font-weight:500; opacity:0.75; text-transform:uppercase;}
+.free-hit-badge{
+  margin-top:10px; display:inline-block; background:var(--gold); color:#4a3200;
+  font-family:'Oswald',sans-serif; font-weight:700; font-size:13px;
+  padding:5px 14px; border-radius:20px; animation:pulse 1s infinite alternate;
+}
+@keyframes pulse{ from{opacity:1;} to{opacity:0.6;} }
+.bowler-figures{font-weight:400; color:var(--ink-soft); font-size:12.5px;}
+
+.more-toggle{
+  width:100%; background:none; border:none; color:var(--ink-soft);
+  font-size:13px; font-weight:600; padding:10px 0; cursor:pointer; text-align:center;
+}
+.extra-btn.bye{background:#8D6E63;}
+.extra-btn.legbye{background:#6D4C41;}
+
+/* ================= HISTORY MODAL ================= */
+.modal-tall{max-height:80vh; display:flex; flex-direction:column;}
+.history-list{overflow-y:auto; flex:1; display:flex; flex-direction:column-reverse; gap:6px; margin:8px 0;}
+.history-item{
+  padding:10px 12px; background:var(--cream); border-radius:10px;
+  font-size:13.5px; display:flex; justify-content:space-between; gap:10px;
+}
+.history-item .h-time{color:var(--ink-soft); font-family:'Oswald',sans-serif; font-weight:600; flex-shrink:0;}
+
+/* ================= OVER / INNINGS FLASH ================= */
+.over-flash{
+  position:fixed; inset:0; z-index:150;
+  background:rgba(18,16,14,0.75); backdrop-filter:blur(4px);
+  display:flex; align-items:center; justify-content:center;
+}
+.over-flash-card{
+  background:linear-gradient(160deg, var(--orange), var(--orange-dark));
+  color:white; padding:34px 30px; border-radius:22px; text-align:center;
+  width:85%; max-width:340px; box-shadow:0 20px 50px rgba(0,0,0,0.4);
+  animation:popIn .3s cubic-bezier(0.34,1.56,0.64,1);
+}
+@keyframes popIn{ from{transform:scale(0.7); opacity:0;} to{transform:scale(1); opacity:1;} }
+.over-flash-title{font-size:12px; letter-spacing:0.15em; opacity:0.85; font-weight:600;}
+.over-flash-num{font-family:'Oswald',sans-serif; font-size:22px; font-weight:700; margin-top:8px;}
+.over-flash-runs{font-family:'Oswald',sans-serif; font-size:40px; font-weight:700; margin-top:6px;}
+.over-flash-sub{font-size:14px; opacity:0.9; margin-top:4px;}
+.over-flash-score{font-size:14px; opacity:0.95; margin-top:10px; font-weight:600;}
+.over-flash-card .small-btn{margin-top:20px; background:white; color:var(--orange-dark);}
+
 @media (min-width:600px){
   .run-btn{font-size:26px;}
   #mainScore{font-size:52px;}

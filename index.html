@@ -31,6 +31,7 @@
   <div class="side-items">
     <button class="side-item" data-action="new-match"><span class="side-icon">🏏</span> New Match</button>
     <button class="side-item" data-action="players"><span class="side-icon">👥</span> Players &amp; Rename</button>
+    <button class="side-item" data-action="history"><span class="side-icon">📜</span> Match History</button>
     <button class="side-item" data-action="switch-innings"><span class="side-icon">🔁</span> Switch / End Innings</button>
     <button class="side-item danger" data-action="reset"><span class="side-icon">🗑️</span> Reset Everything</button>
   </div>
@@ -54,10 +55,22 @@
       <button id="playerPlus" class="stepper-btn">+</button>
     </div>
 
-    <label class="field-label">Overs (optional, for reference)</label>
-    <input id="oversLimit" type="number" min="1" placeholder="e.g. 10 (leave blank for no limit)">
+    <label class="field-label">Overs <span class="required-tag">Required</span></label>
+    <input id="oversLimit" type="number" min="1" placeholder="e.g. 6 or 10" required>
+    <p class="field-hint">Match aur innings automatically overs pure hone par khatam hoga — is liye ye zaroori hai.</p>
 
-    <button id="startMatchBtn" class="primary-btn">Start Match →</button>
+    <button id="startMatchBtn" class="primary-btn">Next: Toss →</button>
+  </div>
+</section>
+
+<!-- ===================== SCREEN 1B: TOSS ===================== -->
+<section id="tossScreen" class="screen">
+  <div class="card">
+    <h1>Who Bats First?</h1>
+    <p class="field-hint">Toss jeetne wali team chuno jo pehle batting karegi.</p>
+    <button id="tossTeamABtn" class="toss-btn"></button>
+    <button id="tossTeamBBtn" class="toss-btn"></button>
+    <button class="back-btn-text" data-back="setupScreen">← Back</button>
   </div>
 </section>
 
@@ -77,7 +90,7 @@
   <!-- Scoreboard -->
   <div class="scoreboard">
     <div class="innings-tag" id="inningsTag">1st Innings</div>
-    <div class="batting-team" id="battingTeamName">Team A</div>
+    <div class="batting-team"><span id="battingTeamName">Team A</span> <span class="vs-tag">batting</span></div>
     <div class="score-row">
       <span id="mainScore">0/0</span>
       <span class="overs" id="mainOvers">(0.0 ov)</span>
@@ -86,7 +99,8 @@
       <span id="crr">CRR: 0.00</span>
       <span id="targetInfo" class="hidden"></span>
     </div>
-    <div class="extras-row" id="extrasRow">Extras: 0 (WD 0, NB 0)</div>
+    <div class="extras-row" id="extrasRow">Extras: 0</div>
+    <div id="freeHitBadge" class="free-hit-badge hidden">⚡ FREE HIT</div>
   </div>
 
   <!-- Batsmen -->
@@ -104,7 +118,7 @@
 
   <!-- Bowler -->
   <div class="bowler-box" id="bowlerBox">
-    <span>Bowler: <strong id="bowlerName">—</strong></span>
+    <span>Bowler: <strong id="bowlerName">—</strong> <span id="bowlerFigures" class="bowler-figures"></span></span>
     <button id="changeBowlerBtn" class="mini-btn">Change</button>
   </div>
 
@@ -138,6 +152,11 @@
       <button class="extra-btn declare" id="declareBtn">RUN<br>DECLARE</button>
       <button class="extra-btn out" id="outBtn">OUT</button>
     </div>
+    <button id="moreExtrasToggle" class="more-toggle">⋯ More Extras (Bye / Leg Bye)</button>
+    <div id="moreExtrasRow" class="extra-grid hidden">
+      <button class="extra-btn bye" id="byeBtn">BYE</button>
+      <button class="extra-btn legbye" id="legbyeBtn">LEG BYE</button>
+    </div>
   </div>
 </section>
 
@@ -162,6 +181,19 @@
     <div class="modal-actions">
       <button class="ghost-btn" data-close="declareModal">Cancel</button>
       <button class="primary-btn" id="declareConfirm">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: BYE / LEG BYE RUNS ===================== -->
+<div id="byeModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3 id="byeModalTitle">Bye Runs</h3>
+    <p class="modal-hint">Counts as a legal ball. Runs go to extras, not the batsman.</p>
+    <input id="byeRunInput" type="number" min="1" placeholder="e.g. 1">
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="byeModal">Cancel</button>
+      <button class="primary-btn" id="byeConfirm">Add</button>
     </div>
   </div>
 </div>
@@ -209,7 +241,18 @@
   </div>
 </div>
 
-<!-- ===================== MODAL: CONFIRM RESET ===================== -->
+<!-- ===================== MODAL: MATCH HISTORY ===================== -->
+<div id="historyModal" class="modal-overlay hidden">
+  <div class="modal modal-tall">
+    <h3>Match History</h3>
+    <div id="historyList" class="history-list"></div>
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="historyModal">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: CONFIRM ===================== -->
 <div id="confirmModal" class="modal-overlay hidden">
   <div class="modal">
     <h3 id="confirmTitle">Are you sure?</h3>
@@ -218,6 +261,29 @@
       <button class="ghost-btn" data-close="confirmModal">Cancel</button>
       <button class="danger-btn" id="confirmYes">Yes, do it</button>
     </div>
+  </div>
+</div>
+
+<!-- ===================== OVER-COMPLETE FLASH ===================== -->
+<div id="overFlash" class="over-flash hidden">
+  <div class="over-flash-card">
+    <div class="over-flash-title">OVER COMPLETE</div>
+    <div class="over-flash-num" id="overFlashNum">Over 1</div>
+    <div class="over-flash-runs" id="overFlashRuns">6 runs</div>
+    <div class="over-flash-sub" id="overFlashSub">1 wicket</div>
+    <div class="over-flash-score" id="overFlashScore">Score: 24/2</div>
+    <button id="overFlashContinue" class="primary-btn small-btn">Continue →</button>
+  </div>
+</div>
+
+<!-- ===================== INNINGS-COMPLETE FLASH ===================== -->
+<div id="inningsFlash" class="over-flash hidden">
+  <div class="over-flash-card">
+    <div class="over-flash-title">INNINGS COMPLETE</div>
+    <div class="over-flash-num" id="inningsFlashTeam">Team A</div>
+    <div class="over-flash-runs" id="inningsFlashScore">120/6</div>
+    <div class="over-flash-sub" id="inningsFlashOvers">10.0 overs</div>
+    <button id="inningsFlashContinue" class="primary-btn small-btn">Continue →</button>
   </div>
 </div>
 
