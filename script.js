@@ -503,7 +503,9 @@ function beginSwitchInnings(){
     teamName: state.battingTeamName,
     runs: state.totalRuns,
     wickets: state.wickets,
-    oversStr: oversStr(state.totalLegalBalls)
+    oversStr: oversStr(state.totalLegalBalls),
+    players: JSON.parse(JSON.stringify(state.players)),
+    bowlerStats: JSON.parse(JSON.stringify(state.bowlerStats))
   };
   state.target = state.totalRuns + 1;
   state.innings = 2;
@@ -561,10 +563,56 @@ function hideOverFlash(){
 }
 $('overFlashContinue').addEventListener('click', ()=>{ clearTimeout(showOverFlash._t); hideOverFlash(); });
 
+function computePOTM(){
+  const allBatters = [
+    ...((state.firstInningsSummary && state.firstInningsSummary.players) || []),
+    ...state.players
+  ];
+  const allBowlerStats = {};
+  if(state.firstInningsSummary && state.firstInningsSummary.bowlerStats){
+    Object.entries(state.firstInningsSummary.bowlerStats).forEach(([name, s])=>{
+      allBowlerStats[name] = { balls: s.balls, runs: s.runs, wickets: s.wickets };
+    });
+  }
+  Object.entries(state.bowlerStats).forEach(([name, s])=>{
+    if(!allBowlerStats[name]) allBowlerStats[name] = { balls:0, runs:0, wickets:0 };
+    allBowlerStats[name].balls += s.balls;
+    allBowlerStats[name].runs += s.runs;
+    allBowlerStats[name].wickets += s.wickets;
+  });
+
+  let topBatter = null;
+  allBatters.forEach(p=>{
+    if(p.balls > 0 && (!topBatter || p.runs > topBatter.runs)) topBatter = p;
+  });
+
+  let topBowlerName = null, topBowler = null;
+  Object.entries(allBowlerStats).forEach(([name, s])=>{
+    if(s.balls > 0 && (!topBowler || s.wickets > topBowler.wickets || (s.wickets === topBowler.wickets && s.runs < topBowler.runs))){
+      topBowler = s; topBowlerName = name;
+    }
+  });
+
+  return { topBatter, topBowler, topBowlerName };
+}
+
 function showInningsFlash(isMatchOver){
   $('inningsFlashTeam').textContent = isMatchOver ? matchOverText() : (state.battingTeamName + ' — Innings Complete');
   $('inningsFlashScore').textContent = state.totalRuns + '/' + state.wickets;
   $('inningsFlashOvers').textContent = oversStr(state.totalLegalBalls) + ' overs';
+
+  const potmEl = $('potmLine');
+  if(isMatchOver){
+    const { topBatter, topBowler, topBowlerName } = computePOTM();
+    let lines = [];
+    if(topBatter) lines.push('🏏 Top Score: ' + topBatter.name + ' — ' + topBatter.runs + ' (' + topBatter.balls + ' balls)');
+    if(topBowler && topBowler.wickets > 0) lines.push('🎯 Best Bowling: ' + topBowlerName + ' — ' + topBowler.wickets + '/' + topBowler.runs);
+    potmEl.textContent = lines.join('\n');
+    potmEl.classList.toggle('hidden', lines.length === 0);
+  } else {
+    potmEl.classList.add('hidden');
+  }
+
   $('inningsFlash').classList.remove('hidden');
 }
 function hideInningsFlash(){
@@ -751,6 +799,82 @@ $('bowlerConfirm').addEventListener('click', ()=>{
   saveState();
 });
 
+function escapeHtml(str){
+  const d = document.createElement('div');
+  d.textContent = str == null ? '' : str;
+  return d.innerHTML;
+}
+
+function buildInningsHTML(teamName, players, bowlerStats, scoreLine){
+  let html = '<div class="sc-innings">';
+  html += '<h4>' + escapeHtml(teamName) + ' — ' + escapeHtml(scoreLine) + '</h4>';
+  html += '<table class="sc-table"><tr><th>Batter</th><th>R</th><th>B</th><th>Status</th></tr>';
+  (players || []).forEach(p=>{
+    if(p.balls > 0 || p.out){
+      html += '<tr><td>' + escapeHtml(p.name) + '</td><td>' + p.runs + '</td><td>' + p.balls + '</td><td>' + (p.out ? escapeHtml(p.howOut) : 'not out') + '</td></tr>';
+    }
+  });
+  html += '</table>';
+  const bowlers = Object.entries(bowlerStats || {}).filter(([,s]) => s.balls > 0);
+  if(bowlers.length){
+    html += '<table class="sc-table"><tr><th>Bowler</th><th>O</th><th>R</th><th>W</th></tr>';
+    bowlers.forEach(([name, s])=>{
+      html += '<tr><td>' + escapeHtml(name) + '</td><td>' + oversStr(s.balls) + '</td><td>' + s.runs + '</td><td>' + s.wickets + '</td></tr>';
+    });
+    html += '</table>';
+  }
+  html += '</div>';
+  return html;
+}
+
+function renderFullScorecard(){
+  let html = '';
+  if(state.firstInningsSummary){
+    html += buildInningsHTML(
+      state.firstInningsSummary.teamName,
+      state.firstInningsSummary.players,
+      state.firstInningsSummary.bowlerStats,
+      state.firstInningsSummary.runs + '/' + state.firstInningsSummary.wickets + ' (' + state.firstInningsSummary.oversStr + ' ov)'
+    );
+  }
+  html += buildInningsHTML(
+    state.battingTeamName,
+    state.players,
+    state.bowlerStats,
+    state.totalRuns + '/' + state.wickets + ' (' + oversStr(state.totalLegalBalls) + ' ov)'
+  );
+  $('scorecardContent').innerHTML = html;
+}
+
+$('downloadScorecardBtn').addEventListener('click', ()=>{
+  if(typeof html2canvas === 'undefined'){
+    toast('Image export not available offline — connect to internet once to load it');
+    return;
+  }
+  const el = $('scorecardContent');
+  $('downloadScorecardBtn').textContent = 'Preparing…';
+  html2canvas(el, { backgroundColor:'#FFF8F0', scale:2 }).then(canvas=>{
+    $('downloadScorecardBtn').textContent = '📤 Share / Download';
+    canvas.toBlob(blob=>{
+      if(!blob) return;
+      const file = new File([blob], 'gully-scorecard.png', { type:'image/png' });
+      if(navigator.share && navigator.canShare && navigator.canShare({ files:[file] })){
+        navigator.share({ files:[file], title:'Gully Score Scorecard', text:'Match scorecard' }).catch(()=>{});
+      } else {
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url; a.download = 'gully-scorecard.png';
+        document.body.appendChild(a); a.click(); document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+        toast('Scorecard image downloaded');
+      }
+    });
+  }).catch(()=>{
+    $('downloadScorecardBtn').textContent = '📤 Share / Download';
+    toast('Could not generate image');
+  });
+});
+
 /* ---- Undo ---- */
 $('undoBtn').addEventListener('click', undo);
 
@@ -810,6 +934,10 @@ document.querySelectorAll('.side-item').forEach(item=>{
       if(!state || !state.matchStarted){ toast('Start a match first'); return; }
       renderHistoryList();
       openModal('historyModal');
+    } else if(action === 'scorecard'){
+      if(!state || !state.matchStarted){ toast('Start a match first'); return; }
+      renderFullScorecard();
+      openModal('scorecardModal');
     } else if(action === 'switch-innings'){
       if(!state || !state.matchStarted){ toast('Start a match first'); return; }
       confirmAction('End this innings?', 'Current score will be locked and a new innings will start.', beginSwitchInnings);
@@ -830,6 +958,15 @@ $('confirmYes').addEventListener('click', ()=>{
   if(confirmCallback) confirmCallback();
   confirmCallback = null;
 });
+
+/* ================================================================
+   PWA — SERVICE WORKER REGISTRATION
+   ================================================================ */
+if('serviceWorker' in navigator){
+  window.addEventListener('load', ()=>{
+    navigator.serviceWorker.register('sw.js').catch(()=>{});
+  });
+}
 
 /* ================================================================
    INIT ON LOAD

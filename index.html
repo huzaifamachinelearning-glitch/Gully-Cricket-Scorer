@@ -3,6 +3,10 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<meta name="theme-color" content="#FF6A2B">
+<link rel="manifest" href="manifest.json">
+<link rel="apple-touch-icon" href="icon.svg">
+<link rel="icon" href="icon.svg" type="image/svg+xml">
 <title>Gully Score — Cricket Scorer</title>
 <link rel="stylesheet" href="style.css">
 </head>
@@ -32,6 +36,7 @@
     <button class="side-item" data-action="new-match"><span class="side-icon">🏏</span> New Match</button>
     <button class="side-item" data-action="players"><span class="side-icon">👥</span> Players &amp; Rename</button>
     <button class="side-item" data-action="history"><span class="side-icon">📜</span> Match History</button>
+    <button class="side-item" data-action="scorecard"><span class="side-icon">📊</span> Full Scorecard / Share</button>
     <button class="side-item" data-action="switch-innings"><span class="side-icon">🔁</span> Switch / End Innings</button>
     <button class="side-item danger" data-action="reset"><span class="side-icon">🗑️</span> Reset Everything</button>
   </div>
@@ -252,6 +257,18 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: FULL SCORECARD ===================== -->
+<div id="scorecardModal" class="modal-overlay hidden">
+  <div class="modal modal-tall">
+    <h3>Full Scorecard</h3>
+    <div id="scorecardContent" class="scorecard-content"></div>
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="scorecardModal">Close</button>
+      <button class="primary-btn" id="downloadScorecardBtn">📤 Share / Download</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== MODAL: CONFIRM ===================== -->
 <div id="confirmModal" class="modal-overlay hidden">
   <div class="modal">
@@ -283,6 +300,7 @@
     <div class="over-flash-num" id="inningsFlashTeam">Team A</div>
     <div class="over-flash-runs" id="inningsFlashScore">120/6</div>
     <div class="over-flash-sub" id="inningsFlashOvers">10.0 overs</div>
+    <div id="potmLine" class="potm-line hidden"></div>
     <button id="inningsFlashContinue" class="primary-btn small-btn">Continue →</button>
   </div>
 </div>
@@ -290,6 +308,7 @@
 <!-- ===================== TOAST ===================== -->
 <div id="toast" class="toast hidden"></div>
 
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="script.js"></script>
 </body>
 </html>

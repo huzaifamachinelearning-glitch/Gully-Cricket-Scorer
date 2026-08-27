@@ -392,6 +392,25 @@ input:focus{outline:none; border-color:var(--orange);}
 .over-flash-score{font-size:14px; opacity:0.95; margin-top:10px; font-weight:600;}
 .over-flash-card .small-btn{margin-top:20px; background:white; color:var(--orange-dark);}
 
+/* ================= POTM ================= */
+.potm-line{
+  margin-top:12px; padding:10px 14px; background:rgba(255,255,255,0.15);
+  border-radius:12px; font-size:13.5px; font-weight:600; line-height:1.5;
+  white-space:pre-line;
+}
+
+/* ================= FULL SCORECARD ================= */
+.scorecard-content{overflow-y:auto; flex:1; padding-right:2px;}
+.sc-innings{margin-bottom:18px; background:var(--cream); border-radius:14px; padding:12px 14px;}
+.sc-innings h4{font-size:15px; margin-bottom:10px; color:var(--orange-dark);}
+.sc-table{width:100%; border-collapse:collapse; margin-bottom:10px; font-size:12.5px;}
+.sc-table th{
+  text-align:left; padding:6px 4px; border-bottom:2px solid var(--line);
+  color:var(--ink-soft); font-weight:600; text-transform:uppercase; font-size:10.5px;
+}
+.sc-table td{padding:6px 4px; border-bottom:1px solid var(--line);}
+.sc-table tr:last-child td{border-bottom:none;}
+
 @media (min-width:600px){
   .run-btn{font-size:26px;}
   #mainScore{font-size:52px;}
