@@ -37,7 +37,9 @@
     <button class="side-item" data-action="players"><span class="side-icon">👥</span> Players &amp; Rename</button>
     <button class="side-item" data-action="history"><span class="side-icon">📜</span> Match History</button>
     <button class="side-item" data-action="scorecard"><span class="side-icon">📊</span> Full Scorecard / Share</button>
+    <button class="side-item" data-action="past-matches"><span class="side-icon">🏆</span> Past Matches</button>
     <button class="side-item" data-action="switch-innings"><span class="side-icon">🔁</span> Switch / End Innings</button>
+    <button class="side-item" id="soundToggleItem"><span class="side-icon">🔊</span> <span id="soundToggleLabel">Sound: ON</span></button>
     <button class="side-item danger" data-action="reset"><span class="side-icon">🗑️</span> Reset Everything</button>
   </div>
 </nav>
@@ -82,7 +84,7 @@
 <!-- ===================== SCREEN 2: PLAYER LIST ===================== -->
 <section id="playerScreen" class="screen">
   <div class="screen-header">
-    <button class="back-btn" data-back="setupScreen">←</button>
+    <button id="playerBackBtn" class="back-btn">←</button>
     <h2 id="playerScreenTitle">Players</h2>
   </div>
   <div id="playerListWrap" class="player-list"></div>
@@ -236,8 +238,10 @@
 
 <!-- ===================== MODAL: CHANGE BOWLER ===================== -->
 <div id="bowlerModal" class="modal-overlay hidden">
-  <div class="modal">
+  <div class="modal modal-tall">
     <h3>Select Bowler</h3>
+    <div id="bowlerChoiceList" class="next-bat-list"></div>
+    <label class="field-label">Or type a name (substitute)</label>
     <input id="bowlerNameInput" type="text" placeholder="Enter bowler name">
     <div class="modal-actions">
       <button class="ghost-btn" data-close="bowlerModal">Cancel</button>
@@ -265,6 +269,18 @@
     <div class="modal-actions">
       <button class="ghost-btn" data-close="scorecardModal">Close</button>
       <button class="primary-btn" id="downloadScorecardBtn">📤 Share / Download</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: PAST MATCHES ===================== -->
+<div id="pastMatchesModal" class="modal-overlay hidden">
+  <div class="modal modal-tall">
+    <h3>Past Matches</h3>
+    <div id="pastMatchesList" class="history-list past-matches-list"></div>
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="pastMatchesModal">Close</button>
+      <button class="danger-btn" id="clearPastMatchesBtn">Clear History</button>
     </div>
   </div>
 </div>

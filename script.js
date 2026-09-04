@@ -4,12 +4,17 @@
    ========================================================= */
 
 const STORAGE_KEY = 'gullyscore_state_v2';
+const PAST_MATCHES_KEY = 'gullyscore_past_matches';
+const SOUND_KEY = 'gullyscore_sound';
 
 let state = null;
-let uiFlow = 'new';          // 'new' | 'rename' | 'switch'  -> controls Player-screen buttons
 let selectedOutType = null;
 let pendingByeType = null;
 let confirmCallback = null;
+let rosterMode = false;      // true while collecting the pre-match Team A / Team B rosters
+let rosterStage = null;      // 'A' | 'B'
+let rosterDraftNames = [];
+let soundEnabled = localStorage.getItem(SOUND_KEY) !== 'off';
 
 /* ---------------- DEFAULT STATE ---------------- */
 function defaultState(){
@@ -22,6 +27,8 @@ function defaultState(){
     innings: 1,
     battingTeamName: 'Team A',
     bowlingTeamName: 'Team B',
+    teamARoster: [],             // plain names, set once at setup
+    teamBRoster: [],
     players: [],                 // {name, runs, balls, out, howOut}
     strikerIdx: 0,
     nonStrikerIdx: 1,
@@ -103,6 +110,14 @@ document.querySelectorAll('[data-close]').forEach(btn=>{
 document.querySelectorAll('[data-back]').forEach(btn=>{
   btn.addEventListener('click', ()=> showScreen(btn.dataset.back));
 });
+$('playerBackBtn').addEventListener('click', ()=>{
+  if(rosterMode || !state.matchStarted){
+    showScreen('setupScreen');
+  } else {
+    showScreen('matchScreen');
+    renderMatchScreen();
+  }
+});
 
 function ensureBowlerStats(name){
   if(!state.bowlerStats[name]) state.bowlerStats[name] = { balls:0, runs:0, wickets:0 };
@@ -118,6 +133,37 @@ function crr(){
   if(state.totalLegalBalls === 0) return '0.00';
   return (state.totalRuns / (state.totalLegalBalls/6)).toFixed(2);
 }
+
+function playTone(freq, duration, type){
+  if(!soundEnabled) return;
+  try{
+    const ctx = window._audioCtx || (window._audioCtx = new (window.AudioContext||window.webkitAudioContext)());
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    osc.type = type || 'sine';
+    osc.frequency.value = freq;
+    gain.gain.setValueAtTime(0.16, ctx.currentTime);
+    gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + duration);
+    osc.connect(gain); gain.connect(ctx.destination);
+    osc.start(); osc.stop(ctx.currentTime + duration);
+  }catch(e){}
+}
+function playSound(kind){
+  if(!soundEnabled) return;
+  if(kind === 'four'){ playTone(523, 0.16); setTimeout(()=>playTone(659, 0.16), 110); }
+  else if(kind === 'six'){ playTone(523, 0.13); setTimeout(()=>playTone(659, 0.13), 90); setTimeout(()=>playTone(784, 0.22), 180); }
+  else if(kind === 'wicket'){ playTone(160, 0.3, 'sawtooth'); }
+  else if(kind === 'over'){ playTone(392, 0.15); setTimeout(()=>playTone(330, 0.15), 160); }
+}
+function updateSoundLabel(){
+  $('soundToggleLabel').textContent = 'Sound: ' + (soundEnabled ? 'ON' : 'OFF');
+}
+$('soundToggleItem').addEventListener('click', ()=>{
+  soundEnabled = !soundEnabled;
+  localStorage.setItem(SOUND_KEY, soundEnabled ? 'on' : 'off');
+  updateSoundLabel();
+  toast(soundEnabled ? 'Sound ON' : 'Sound OFF');
+});
 
 /* ================================================================
    SETUP SCREEN
@@ -159,21 +205,82 @@ $('startMatchBtn').addEventListener('click', ()=>{
 function chooseBattingTeam(name){
   state.battingTeamName = name;
   state.bowlingTeamName = (name === state.teamA) ? state.teamB : state.teamA;
-  state.players = Array.from({length: state.numPlayers}, (_, i)=>({
-    name: 'Player ' + (i+1), runs: 0, balls: 0, out: false, howOut: ''
-  }));
-  uiFlow = 'new';
-  renderPlayerScreen();
+  rosterMode = true;
+  rosterStage = 'A';
+  rosterDraftNames = Array.from({length: state.numPlayers}, (_, i)=>'Player '+(i+1));
+  renderRosterScreen();
   showScreen('playerScreen');
 }
 $('tossTeamABtn').addEventListener('click', ()=> chooseBattingTeam(state.teamA));
 $('tossTeamBBtn').addEventListener('click', ()=> chooseBattingTeam(state.teamB));
 
 /* ================================================================
-   PLAYER SCREEN (rename / add / remove)
+   ROSTER SCREEN (pre-match: collect BOTH teams' player names)
+   ================================================================ */
+function renderRosterScreen(){
+  const teamLabel = rosterStage === 'A' ? state.teamA : state.teamB;
+  $('playerScreenTitle').textContent = teamLabel + ' — Enter Players';
+  const wrap = $('playerListWrap');
+  wrap.innerHTML = '';
+
+  rosterDraftNames.forEach((name, idx)=>{
+    const row = document.createElement('div');
+    row.className = 'player-row';
+
+    const num = document.createElement('div');
+    num.className = 'p-num';
+    num.textContent = idx+1;
+
+    const input = document.createElement('input');
+    input.type = 'text';
+    input.value = name;
+    input.addEventListener('input', ()=>{ rosterDraftNames[idx] = input.value; });
+
+    const rm = document.createElement('button');
+    rm.className = 'remove-player';
+    rm.innerHTML = '✕';
+    rm.addEventListener('click', ()=>{
+      if(rosterDraftNames.length <= 2){ toast('Need at least 2 players'); return; }
+      rosterDraftNames.splice(idx,1);
+      renderRosterScreen();
+    });
+
+    row.appendChild(num);
+    row.appendChild(input);
+    row.appendChild(rm);
+    wrap.appendChild(row);
+  });
+
+  const addRow = document.createElement('div');
+  addRow.className = 'add-player-row';
+  addRow.textContent = '+ Add Player';
+  addRow.addEventListener('click', ()=>{
+    rosterDraftNames.push('Player ' + (rosterDraftNames.length+1));
+    renderRosterScreen();
+  });
+  wrap.appendChild(addRow);
+
+  $('playersDoneBtn').textContent = rosterStage === 'A' ? (state.teamB + ' Players →') : 'Done — Go to Scoring →';
+}
+
+function initMatchStateFromRosters(){
+  const battingNames = (state.battingTeamName === state.teamA) ? state.teamARoster : state.teamBRoster;
+  const bowlingNames = (state.bowlingTeamName === state.teamA) ? state.teamARoster : state.teamBRoster;
+  state.players = battingNames.map(n => ({ name: n, runs: 0, balls: 0, out: false, howOut: '' }));
+  state.matchStarted = true;
+  state.strikerIdx = 0;
+  state.nonStrikerIdx = state.players.length > 1 ? 1 : 0;
+  state.bowlerName = bowlingNames[0] || 'Bowler 1';
+  ensureBowlerStats(state.bowlerName);
+  logEvent(state.battingTeamName + ' innings begins — ' + state.oversLimit + ' overs match');
+  saveState();
+}
+
+/* ================================================================
+   PLAYER SCREEN (mid-match rename via side menu)
    ================================================================ */
 function renderPlayerScreen(){
-  $('playerScreenTitle').textContent = state.matchStarted ? 'Players' : (state.battingTeamName + ' — Players');
+  $('playerScreenTitle').textContent = 'Players — ' + state.battingTeamName;
   const wrap = $('playerListWrap');
   wrap.innerHTML = '';
 
@@ -188,68 +295,48 @@ function renderPlayerScreen(){
     const input = document.createElement('input');
     input.type = 'text';
     input.value = p.name;
-    input.addEventListener('input', ()=>{ p.name = input.value; saveState(); if(state.matchStarted) renderMatchScreen(); });
+    input.addEventListener('input', ()=>{
+      p.name = input.value;
+      const rosterArr = (state.battingTeamName === state.teamA) ? state.teamARoster : state.teamBRoster;
+      if(rosterArr && rosterArr[idx] !== undefined) rosterArr[idx] = input.value;
+      saveState();
+      renderMatchScreen();
+    });
 
     row.appendChild(num);
     row.appendChild(input);
 
-    if(state.matchStarted){
-      const stat = document.createElement('div');
-      stat.className = 'p-stat';
-      stat.textContent = p.out ? (p.runs+' ('+p.balls+') • OUT') : (p.balls>0 ? p.runs+' ('+p.balls+')' : '—');
-      row.appendChild(stat);
-    } else {
-      const rm = document.createElement('button');
-      rm.className = 'remove-player';
-      rm.innerHTML = '✕';
-      rm.addEventListener('click', ()=>{
-        if(state.players.length <= 2){ toast('Need at least 2 players'); return; }
-        state.players.splice(idx,1);
-        renderPlayerScreen();
-      });
-      row.appendChild(rm);
-    }
+    const stat = document.createElement('div');
+    stat.className = 'p-stat';
+    stat.textContent = p.out ? (p.runs+' ('+p.balls+') • OUT') : (p.balls>0 ? p.runs+' ('+p.balls+')' : '—');
+    row.appendChild(stat);
+
     wrap.appendChild(row);
   });
 
-  if(!state.matchStarted){
-    const addRow = document.createElement('div');
-    addRow.className = 'add-player-row';
-    addRow.textContent = '+ Add Player';
-    addRow.addEventListener('click', ()=>{
-      state.players.push({name:'Player '+(state.players.length+1), runs:0, balls:0, out:false, howOut:''});
-      renderPlayerScreen();
-    });
-    wrap.appendChild(addRow);
-  }
-
-  $('playersDoneBtn').textContent = state.matchStarted ? 'Done' : 'Done — Go to Scoring →';
+  $('playersDoneBtn').textContent = 'Done';
 }
 
 $('playersDoneBtn').addEventListener('click', ()=>{
-  if(uiFlow === 'new'){
-    initMatchState();
-    showScreen('matchScreen');
-    renderMatchScreen();
-  } else if(uiFlow === 'switch'){
-    startNextInnings();
-    showScreen('matchScreen');
-    renderMatchScreen();
-  } else {
-    showScreen('matchScreen');
-    renderMatchScreen();
+  if(rosterMode){
+    if(rosterStage === 'A'){
+      state.teamARoster = [...rosterDraftNames];
+      rosterStage = 'B';
+      rosterDraftNames = Array.from({length: state.numPlayers}, (_, i)=>'Player '+(i+1));
+      renderRosterScreen();
+      return;
+    } else {
+      state.teamBRoster = [...rosterDraftNames];
+      rosterMode = false;
+      initMatchStateFromRosters();
+      showScreen('matchScreen');
+      renderMatchScreen();
+      return;
+    }
   }
+  showScreen('matchScreen');
+  renderMatchScreen();
 });
-
-function initMatchState(){
-  state.matchStarted = true;
-  state.strikerIdx = 0;
-  state.nonStrikerIdx = state.players.length > 1 ? 1 : 0;
-  state.bowlerName = 'Bowler 1';
-  ensureBowlerStats(state.bowlerName);
-  logEvent(state.battingTeamName + ' innings begins — ' + state.oversLimit + ' overs match');
-  saveState();
-}
 
 /* ================================================================
    MATCH SCREEN — SCORING ENGINE
@@ -274,6 +361,7 @@ function maybeCompleteOver(){
     state.currentOverWickets = 0;
     swapStrike();
     logEvent('— End of Over ' + overNum + ': ' + runsThisOver + ' run(s), ' + wktsThisOver + ' wicket(s). Strike changes. —');
+    playSound('over');
     state.pendingOverFlash = { overNum, runsThisOver, wktsThisOver };
   }
 }
@@ -319,6 +407,7 @@ function handlePostBallUI(){
   if(state.matchOver && !state.matchFlashShown){
     state.matchFlashShown = true;
     saveState();
+    savePastMatch();
     showInningsFlash(true);
     return;
   }
@@ -353,6 +442,8 @@ function playLegalDelivery(runs){
   bs.balls++; bs.runs += runs;
   addBallChip(String(runs), runs>=4 ? 'boundary' : 'normal');
   logEvent(striker.name + ' scores ' + runs + (runs===6?' — SIX! 🎉':(runs===4?' — FOUR!':' run(s)')));
+  if(runs === 4) playSound('four');
+  if(runs === 6) playSound('six');
   state.freeHit = false;
   rotateStrikeIfOdd(runs);
   maybeCompleteOver();
@@ -459,6 +550,7 @@ function playOut(outType, runOutRuns){
   if(outType === 'Run Out' && runOutRuns > 0) bs.runs += runOutRuns;
   addBallChip('W', 'wicket');
   logEvent(striker.name + ' OUT (' + outType + ')' + (outType==='Run Out' && runOutRuns>0 ? ' +'+runOutRuns+' run(s)' : ''));
+  playSound('wicket');
   state.freeHit = false;
   if(outType === 'Run Out') rotateStrikeIfOdd(runOutRuns || 0);
   maybeCompleteOver();
@@ -513,24 +605,24 @@ function beginSwitchInnings(){
   state.battingTeamName = state.bowlingTeamName;
   state.bowlingTeamName = prevBatting;
 
-  const n = state.players.length;
-  state.players = Array.from({length:n}, (_,i)=>({name:'Player '+(i+1), runs:0, balls:0, out:false, howOut:''}));
-
   state.inningsOver = false;
   state.matchOver = false;
   state.inningsFlashShown = false;
   state.matchFlashShown = false;
   state.history = [];
-  saveState();
 
-  uiFlow = 'switch';
-  renderPlayerScreen();
-  showScreen('playerScreen');
+  startNextInnings();
+  showScreen('matchScreen');
+  renderMatchScreen();
 }
 function startNextInnings(){
+  const battingNames = (state.battingTeamName === state.teamA) ? state.teamARoster : state.teamBRoster;
+  const bowlingNames = (state.bowlingTeamName === state.teamA) ? state.teamARoster : state.teamBRoster;
+  state.players = (battingNames.length ? battingNames : Array.from({length:state.numPlayers},(_,i)=>'Player '+(i+1)))
+    .map(n => ({ name: n, runs: 0, balls: 0, out: false, howOut: '' }));
   state.strikerIdx = 0;
   state.nonStrikerIdx = state.players.length > 1 ? 1 : 0;
-  state.bowlerName = 'Bowler 1';
+  state.bowlerName = bowlingNames[0] || 'Bowler 1';
   state.bowlerStats = {};
   ensureBowlerStats(state.bowlerName);
   state.totalRuns = 0;
@@ -783,8 +875,29 @@ $('outConfirm').addEventListener('click', ()=>{
 });
 
 /* ---- Bowler ---- */
-$('changeBowlerBtn').addEventListener('click', ()=>{
+function renderBowlerChoices(){
+  const bowlingNames = (state.bowlingTeamName === state.teamA) ? state.teamARoster : state.teamBRoster;
+  const list = $('bowlerChoiceList');
+  list.innerHTML = '';
+  (bowlingNames || []).forEach(name=>{
+    const item = document.createElement('div');
+    item.className = 'next-bat-item';
+    item.textContent = name;
+    item.addEventListener('click', ()=>{
+      state.bowlerName = name;
+      ensureBowlerStats(name);
+      logEvent('Bowling change: ' + name);
+      closeModal('bowlerModal');
+      renderMatchScreen();
+      saveState();
+    });
+    list.appendChild(item);
+  });
+}
+$('changeBowlerBtn').addEventListener('click', (e)=>{
+  e.stopPropagation();
   $('bowlerNameInput').value = '';
+  renderBowlerChoices();
   openModal('bowlerModal');
 });
 $('bowlerConfirm').addEventListener('click', ()=>{
@@ -797,6 +910,11 @@ $('bowlerConfirm').addEventListener('click', ()=>{
   closeModal('bowlerModal');
   renderMatchScreen();
   saveState();
+});
+$('bowlerBox').addEventListener('click', ()=>{
+  if(!state.matchStarted) return;
+  renderFullScorecard();
+  openModal('scorecardModal');
 });
 
 function escapeHtml(str){
@@ -875,6 +993,71 @@ $('downloadScorecardBtn').addEventListener('click', ()=>{
   });
 });
 
+function savePastMatch(){
+  try{
+    const list = JSON.parse(localStorage.getItem(PAST_MATCHES_KEY) || '[]');
+    list.unshift({
+      date: new Date().toISOString(),
+      teamA: state.teamA,
+      teamB: state.teamB,
+      result: matchOverText(),
+      innings1: state.firstInningsSummary ? {
+        team: state.firstInningsSummary.teamName,
+        runs: state.firstInningsSummary.runs,
+        wickets: state.firstInningsSummary.wickets,
+        overs: state.firstInningsSummary.oversStr
+      } : null,
+      innings2: {
+        team: state.battingTeamName,
+        runs: state.totalRuns,
+        wickets: state.wickets,
+        overs: oversStr(state.totalLegalBalls)
+      }
+    });
+    if(list.length > 20) list.length = 20;
+    localStorage.setItem(PAST_MATCHES_KEY, JSON.stringify(list));
+  }catch(e){}
+}
+
+function renderPastMatchesList(){
+  const wrap = $('pastMatchesList');
+  wrap.innerHTML = '';
+  let list = [];
+  try{ list = JSON.parse(localStorage.getItem(PAST_MATCHES_KEY) || '[]'); }catch(e){}
+  if(list.length === 0){
+    const empty = document.createElement('div');
+    empty.className = 'history-item';
+    empty.textContent = 'No completed matches yet.';
+    wrap.appendChild(empty);
+    return;
+  }
+  list.forEach(m=>{
+    const div = document.createElement('div');
+    div.className = 'past-match-item';
+    const dateStr = new Date(m.date).toLocaleDateString('en-IN', { day:'numeric', month:'short', year:'numeric' });
+
+    const title = document.createElement('div'); title.className = 'pm-title'; title.textContent = m.teamA + ' vs ' + m.teamB;
+    const date = document.createElement('div'); date.className = 'pm-date'; date.textContent = dateStr;
+    const result = document.createElement('div'); result.className = 'pm-result'; result.textContent = m.result;
+    const scores = document.createElement('div'); scores.className = 'pm-scores';
+    let scoreText = '';
+    if(m.innings1) scoreText += m.innings1.team + ': ' + m.innings1.runs + '/' + m.innings1.wickets + ' (' + m.innings1.overs + ' ov)  •  ';
+    scoreText += m.innings2.team + ': ' + m.innings2.runs + '/' + m.innings2.wickets + ' (' + m.innings2.overs + ' ov)';
+    scores.textContent = scoreText;
+
+    div.appendChild(title); div.appendChild(date); div.appendChild(result); div.appendChild(scores);
+    wrap.appendChild(div);
+  });
+}
+
+$('clearPastMatchesBtn').addEventListener('click', ()=>{
+  confirmAction('Clear past matches?', 'This will permanently delete all saved match results.', ()=>{
+    localStorage.removeItem(PAST_MATCHES_KEY);
+    renderPastMatchesList();
+    toast('Past matches cleared');
+  });
+});
+
 /* ---- Undo ---- */
 $('undoBtn').addEventListener('click', undo);
 
@@ -927,7 +1110,6 @@ document.querySelectorAll('.side-item').forEach(item=>{
       confirmAction('Start a new match?', 'This will clear the current match completely.', resetToSetup);
     } else if(action === 'players'){
       if(!state || !state.matchStarted){ toast('Start a match first'); return; }
-      uiFlow = 'rename';
       renderPlayerScreen();
       showScreen('playerScreen');
     } else if(action === 'history'){
@@ -938,6 +1120,9 @@ document.querySelectorAll('.side-item').forEach(item=>{
       if(!state || !state.matchStarted){ toast('Start a match first'); return; }
       renderFullScorecard();
       openModal('scorecardModal');
+    } else if(action === 'past-matches'){
+      renderPastMatchesList();
+      openModal('pastMatchesModal');
     } else if(action === 'switch-innings'){
       if(!state || !state.matchStarted){ toast('Start a match first'); return; }
       confirmAction('End this innings?', 'Current score will be locked and a new innings will start.', beginSwitchInnings);
@@ -972,6 +1157,7 @@ if('serviceWorker' in navigator){
    INIT ON LOAD
    ================================================================ */
 window.addEventListener('DOMContentLoaded', ()=>{
+  updateSoundLabel();
   const saved = loadState();
   if(saved && saved.matchStarted){
     state = saved;
@@ -980,6 +1166,8 @@ window.addEventListener('DOMContentLoaded', ()=>{
     if(!state.bowlerStats) state.bowlerStats = {};
     if(!state.extras.bye) state.extras.bye = 0;
     if(!state.extras.legbye) state.extras.legbye = 0;
+    if(!state.teamARoster) state.teamARoster = state.players.map(p=>p.name);
+    if(!state.teamBRoster) state.teamBRoster = [];
     showScreen('matchScreen');
     renderMatchScreen();
   } else {

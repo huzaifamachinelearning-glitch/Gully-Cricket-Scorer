@@ -6,7 +6,9 @@ HOW TO USE
 2. Setup screen: enter both team names, number of players (2-30), and OVERS (required — this is what
    ends the innings and the match automatically).
 3. Toss screen: pick which team bats first.
-4. Rename each player to match your real players, tap "Done".
+4. Enter BOTH teams' player names — first the team batting first, then the other team. Both rosters
+   are saved for the whole match, so you never have to re-type names when innings switch, and the
+   bowler picker always shows real names from the bowling side.
 5. Scoring screen:
    - Tap 0/1/2/3/4/5/6 for runs on a normal ball.
    - Tap "+" to add any custom run value (7, 8, etc).
@@ -22,14 +24,32 @@ HOW TO USE
    - When overs run out or the whole team is out, the innings/match locks automatically and a summary
      card appears — buttons stop working until you tap "Start 2nd Innings" or "Start New Match".
    - ↺ (top-right) undoes the last action — use this if you tap the wrong button.
-6. Hamburger menu (☰ top-left):
+   - Boundary/wicket/over sounds play automatically (toggle off anytime from the menu).
+6. Change Bowler now shows a tappable list of the actual bowling team's players (from the roster you
+   entered) — no need to type names during the match. A text field is still there for a substitute.
+7. Hamburger menu (☰ top-left):
    - New Match — wipes everything and starts fresh.
-   - Players & Rename — edit player names anytime.
+   - Players & Rename — edit player names anytime (also updates the bowler list for that team).
    - Match History — full ball-by-ball log of everything that happened, so you can always show
      someone exactly how the score reached where it is.
-   - Switch / End Innings — locks the current score, sets the target, and lets you set up the second
-     batting side.
+   - Full Scorecard / Share — proper batting + bowling scorecard for both innings (tap the bowler
+     box anytime to jump straight here), with a "Share / Download" button that generates a shareable
+     image (WhatsApp / Instagram ready).
+   - Past Matches — every completed match is saved here automatically (teams, result, both innings'
+     scores) so old results aren't lost when you start a new match.
+   - Switch / End Innings — locks the current score, sets the target, and moves straight to the
+     2nd innings using the roster you already entered.
+   - Sound — toggle scoring sound effects on/off.
    - Reset Everything — same as New Match.
+8. Player of the Match — shown automatically on the final match-complete flash card (top scorer +
+   best bowler across both innings).
+
+INSTALL AS AN APP (PWA)
+Once deployed online (GitHub Pages / Netlify), open the link in Chrome on your phone, then:
+   Chrome menu (⋮) → "Add to Home Screen" / "Install App"
+This adds a real app icon and lets it open full-screen without the browser address bar. It also
+works offline after the first load (manifest.json, icon.svg, and sw.js power this — keep them in
+the same folder as the other files).
 
 NOTES
 - All data is saved in your browser automatically (localStorage). Closing the browser or refreshing will NOT lose your match — it reopens exactly where you left off.

@@ -411,6 +411,18 @@ input:focus{outline:none; border-color:var(--orange);}
 .sc-table td{padding:6px 4px; border-bottom:1px solid var(--line);}
 .sc-table tr:last-child td{border-bottom:none;}
 
+/* ================= PAST MATCHES ================= */
+.past-matches-list{flex-direction:column; gap:10px;}
+.past-match-item{
+  background:var(--cream); border-radius:12px; padding:12px 14px;
+  display:flex; flex-direction:column; gap:3px;
+}
+.pm-title{font-family:'Oswald',sans-serif; font-weight:700; font-size:15px; color:var(--ink);}
+.pm-date{font-size:11.5px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:0.03em;}
+.pm-result{font-size:13px; font-weight:600; color:var(--orange-dark); margin-top:2px;}
+.pm-scores{font-size:12.5px; color:var(--ink-soft);}
+.bowler-box{cursor:pointer;}
+
 @media (min-width:600px){
   .run-btn{font-size:26px;}
   #mainScore{font-size:52px;}
