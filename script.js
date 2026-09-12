@@ -7,6 +7,16 @@ const STORAGE_KEY = 'gullyscore_state_v2';
 const PAST_MATCHES_KEY = 'gullyscore_past_matches';
 const SOUND_KEY = 'gullyscore_sound';
 
+/* ---------------- SUPABASE (cloud backup + live sync) ---------------- */
+const SUPABASE_URL = 'https://yvsumqmonhicgjkpjkvc.supabase.co';
+const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Inl2c3VtcW1vbmhpY2dqa3Bqa3ZjIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODg5MzU0NjcsImV4cCI6MjEwNDUxMTQ2N30.u0o_bqHOjAYEB2kg9uJXRygoa4Sk_LCkec0rQacIj_0';
+const supabaseClient = (window.supabase && SUPABASE_URL.startsWith('https'))
+  ? window.supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY)
+  : null;
+
+let realtimeChannel = null;
+let _pushTimer = null;
+
 let state = null;
 let selectedOutType = null;
 let pendingByeType = null;
@@ -26,6 +36,8 @@ function defaultState(){
     matchStarted: false,
     innings: 1,
     battingTeamName: 'Team A',
+    matchCode: null,
+    isViewer: false,
     bowlingTeamName: 'Team B',
     teamARoster: [],             // plain names, set once at setup
     teamBRoster: [],
@@ -58,6 +70,7 @@ function defaultState(){
 /* ---------------- PERSISTENCE ---------------- */
 function saveState(){
   try{ localStorage.setItem(STORAGE_KEY, JSON.stringify(state)); }catch(e){}
+  pushToCloud();
 }
 function loadState(){
   try{
@@ -66,6 +79,66 @@ function loadState(){
   }catch(e){}
   return null;
 }
+
+function generateMatchCode(){
+  const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789';
+  let code = '';
+  for(let i=0; i<6; i++) code += chars[Math.floor(Math.random()*chars.length)];
+  return code;
+}
+
+function pushToCloud(){
+  if(!supabaseClient || !state || !state.matchCode || state.isViewer) return;
+  clearTimeout(_pushTimer);
+  _pushTimer = setTimeout(()=>{
+    const clone = JSON.parse(JSON.stringify(state));
+    delete clone.history;   // undo stack — no need to sync, keeps payload small
+    supabaseClient.from('matches').upsert({
+      match_code: state.matchCode,
+      team_a: state.teamA,
+      team_b: state.teamB,
+      state: clone
+    }, { onConflict: 'match_code' }).then(()=>{}).catch(()=>{});
+  }, 400);
+}
+
+function joinMatchAsViewer(code){
+  if(!supabaseClient){ toast('Internet connection chahiye live match dekhne ke liye'); return; }
+  toast('Match dhoondh rahe hain…');
+  supabaseClient.from('matches').select('*').eq('match_code', code).single().then(({ data, error })=>{
+    if(error || !data){ toast('Match nahi mila — code check karo'); return; }
+    state = data.state;
+    state.isViewer = true;
+    state.history = [];
+    showScreen('matchScreen');
+    renderMatchScreen();
+    subscribeToMatch(code);
+    toast('Live match se connect ho gaye!');
+  }).catch(()=>{ toast('Kuch gadbad hui, dobara try karo'); });
+}
+
+function subscribeToMatch(code){
+  if(!supabaseClient) return;
+  if(realtimeChannel){ supabaseClient.removeChannel(realtimeChannel); realtimeChannel = null; }
+  realtimeChannel = supabaseClient
+    .channel('match-' + code)
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'matches', filter: 'match_code=eq.' + code }, (payload)=>{
+      state = payload.new.state;
+      state.isViewer = true;
+      state.history = [];
+      renderMatchScreen();
+    })
+    .subscribe();
+}
+
+function stopWatching(){
+  if(realtimeChannel && supabaseClient){ supabaseClient.removeChannel(realtimeChannel); realtimeChannel = null; }
+  localStorage.removeItem(STORAGE_KEY);
+  state = defaultState();
+  showScreen('setupScreen');
+  toast('Match se disconnect ho gaye');
+}
+
 function pushHistory(){
   const snap = JSON.parse(JSON.stringify(state));
   delete snap.history;
@@ -199,6 +272,17 @@ $('startMatchBtn').addEventListener('click', ()=>{
   showScreen('tossScreen');
 });
 
+$('watchMatchBtn').addEventListener('click', ()=>{
+  $('watchCodeInput').value = '';
+  openModal('watchCodeModal');
+});
+$('watchCodeConfirm').addEventListener('click', ()=>{
+  const code = $('watchCodeInput').value.trim().toUpperCase();
+  if(!code){ toast('Match code daalo'); return; }
+  closeModal('watchCodeModal');
+  joinMatchAsViewer(code);
+});
+
 /* ================================================================
    TOSS SCREEN
    ================================================================ */
@@ -271,6 +355,7 @@ function initMatchStateFromRosters(){
   state.strikerIdx = 0;
   state.nonStrikerIdx = state.players.length > 1 ? 1 : 0;
   state.bowlerName = bowlingNames[0] || 'Bowler 1';
+  state.matchCode = generateMatchCode();
   ensureBowlerStats(state.bowlerName);
   logEvent(state.battingTeamName + ' innings begins — ' + state.oversLimit + ' overs match');
   saveState();
@@ -769,6 +854,21 @@ function renderMatchScreen(){
   const shouldDisable = !!(state.matchOver || state.inningsOver);
   document.querySelectorAll('.run-btn, .extra-btn').forEach(b => b.disabled = shouldDisable);
 
+  // Viewer mode: hide all scoring controls, show a LIVE badge instead
+  const isViewer = !!state.isViewer;
+  $('scoringPad').style.display = isViewer ? 'none' : '';
+  $('undoBtn').style.display = isViewer ? 'none' : '';
+  $('changeBowlerBtn').style.display = isViewer ? 'none' : '';
+  $('liveViewerBadge').classList.toggle('hidden', !isViewer);
+  $('stopWatchingItem').style.display = isViewer ? '' : 'none';
+
+  if(state.matchCode && !isViewer){
+    $('matchCodePill').textContent = 'Code: ' + state.matchCode + ' 📋';
+    $('matchCodePill').classList.remove('hidden');
+  } else {
+    $('matchCodePill').classList.add('hidden');
+  }
+
   renderStatusBanner();
 }
 
@@ -1106,6 +1206,11 @@ document.querySelectorAll('.side-item').forEach(item=>{
   item.addEventListener('click', ()=>{
     closeSideMenu();
     const action = item.dataset.action;
+    const editActions = ['new-match', 'players', 'switch-innings', 'reset'];
+    if(state && state.isViewer && editActions.includes(action)){
+      toast('Viewer mode — sirf dekh sakte ho, score nahi kar sakte');
+      return;
+    }
     if(action === 'new-match'){
       confirmAction('Start a new match?', 'This will clear the current match completely.', resetToSetup);
     } else if(action === 'players'){
@@ -1130,6 +1235,19 @@ document.querySelectorAll('.side-item').forEach(item=>{
       confirmAction('Reset everything?', 'All match data will be permanently deleted.', resetToSetup);
     }
   });
+});
+
+$('stopWatchingItem').addEventListener('click', ()=>{
+  closeSideMenu();
+  stopWatching();
+});
+$('matchCodePill').addEventListener('click', ()=>{
+  if(!state.matchCode) return;
+  if(navigator.clipboard){
+    navigator.clipboard.writeText(state.matchCode).then(()=> toast('Match code copied!')).catch(()=>{});
+  } else {
+    toast('Code: ' + state.matchCode);
+  }
 });
 
 function confirmAction(title, text, cb){

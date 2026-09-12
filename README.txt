@@ -43,6 +43,12 @@ HOW TO USE
    - Reset Everything — same as New Match.
 8. Player of the Match — shown automatically on the final match-complete flash card (top scorer +
    best bowler across both innings).
+9. Live Match Code — when a match starts, a "Code: XXXXXX" pill appears on the scoreboard. Tap it to
+   copy. Share this code with anyone — they can tap "👀 Ya ek live match dekho" on the setup screen,
+   enter the code, and see the score update live on their own phone (read-only, they can't score).
+10. All match data is also backed up to the cloud automatically as you score (via Supabase) — so even
+    if this phone is lost or browser data is cleared, the match can still be watched/recovered as
+    long as you have the match code.
 
 INSTALL AS AN APP (PWA)
 Once deployed online (GitHub Pages / Netlify), open the link in Chrome on your phone, then:
@@ -53,7 +59,8 @@ the same folder as the other files).
 
 NOTES
 - All data is saved in your browser automatically (localStorage). Closing the browser or refreshing will NOT lose your match — it reopens exactly where you left off.
-- Works fully offline after the first load, except the Google Fonts (visual only, app still works without internet).
-- No installation, no server — just 3 files: index.html, style.css, script.js. Keep all three in the same folder.
+- Works fully offline after the first load, except Google Fonts and the live/cloud features (visual + core scoring still work without internet).
+- Files needed: index.html, style.css, script.js, manifest.json, icon.svg, sw.js — keep all six in the same folder.
+- Live watching and cloud backup need internet. Everything else (scoring, undo, scorecard, offline PWA mode) works fully offline.
 
 Bas ek baar setup karo, phir har ball pe tap karke score continue karo. Ladai khatam! 🏏

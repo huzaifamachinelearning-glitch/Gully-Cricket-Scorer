@@ -41,6 +41,7 @@
     <button class="side-item" data-action="switch-innings"><span class="side-icon">🔁</span> Switch / End Innings</button>
     <button class="side-item" id="soundToggleItem"><span class="side-icon">🔊</span> <span id="soundToggleLabel">Sound: ON</span></button>
     <button class="side-item danger" data-action="reset"><span class="side-icon">🗑️</span> Reset Everything</button>
+    <button class="side-item danger" id="stopWatchingItem" style="display:none"><span class="side-icon">🔴</span> Stop Watching</button>
   </div>
 </nav>
 
@@ -67,6 +68,8 @@
     <p class="field-hint">Match aur innings automatically overs pure hone par khatam hoga — is liye ye zaroori hai.</p>
 
     <button id="startMatchBtn" class="primary-btn">Next: Toss →</button>
+
+    <button id="watchMatchBtn" class="ghost-btn-full" type="button">👀 Ya ek live match dekho</button>
   </div>
 </section>
 
@@ -108,6 +111,8 @@
     </div>
     <div class="extras-row" id="extrasRow">Extras: 0</div>
     <div id="freeHitBadge" class="free-hit-badge hidden">⚡ FREE HIT</div>
+    <div id="matchCodePill" class="match-code-pill hidden">Code: ------ 📋</div>
+    <div id="liveViewerBadge" class="live-viewer-badge hidden">🔴 LIVE — Watching</div>
   </div>
 
   <!-- Batsmen -->
@@ -142,7 +147,7 @@
   </div>
 
   <!-- Scoring pad -->
-  <div class="pad">
+  <div class="pad" id="scoringPad">
     <div class="run-grid">
       <button class="run-btn" data-run="0">0</button>
       <button class="run-btn" data-run="1">1</button>
@@ -285,6 +290,19 @@
   </div>
 </div>
 
+<!-- ===================== MODAL: WATCH MATCH ===================== -->
+<div id="watchCodeModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>Watch a Live Match</h3>
+    <p class="modal-hint">Scorer se match code lo aur yaha daalo.</p>
+    <input id="watchCodeInput" type="text" placeholder="e.g. GULLY7X" style="text-transform:uppercase">
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="watchCodeModal">Cancel</button>
+      <button class="primary-btn" id="watchCodeConfirm">Watch →</button>
+    </div>
+  </div>
+</div>
+
 <!-- ===================== MODAL: CONFIRM ===================== -->
 <div id="confirmModal" class="modal-overlay hidden">
   <div class="modal">
@@ -325,6 +343,7 @@
 <div id="toast" class="toast hidden"></div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <script src="script.js"></script>
 </body>
 </html>
