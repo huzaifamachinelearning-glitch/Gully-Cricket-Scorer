@@ -144,6 +144,7 @@
   <div id="statusBanner" class="status-banner hidden">
     <p id="statusBannerText"></p>
     <button id="statusBannerBtn" class="primary-btn small-btn">Continue</button>
+    <button id="statusBannerBtn2" class="ghost-btn small-btn hidden">Other option</button>
   </div>
 
   <!-- Scoring pad -->
@@ -193,6 +194,25 @@
     <div class="modal-actions">
       <button class="ghost-btn" data-close="declareModal">Cancel</button>
       <button class="primary-btn" id="declareConfirm">Add</button>
+    </div>
+  </div>
+</div>
+
+<!-- ===================== MODAL: NO BALL RUNS ===================== -->
+<div id="noballModal" class="modal-overlay hidden">
+  <div class="modal">
+    <h3>No Ball</h3>
+    <p class="modal-hint">+1 run add hoga automatically. Bat se kitne runs bhi lage?</p>
+    <div class="out-type-grid" id="noballRunGrid">
+      <button class="out-type-btn" data-runs="0">0 (only NB)</button>
+      <button class="out-type-btn" data-runs="1">1</button>
+      <button class="out-type-btn" data-runs="2">2</button>
+      <button class="out-type-btn" data-runs="3">3</button>
+      <button class="out-type-btn" data-runs="4">4 — FOUR</button>
+      <button class="out-type-btn" data-runs="6">6 — SIX</button>
+    </div>
+    <div class="modal-actions">
+      <button class="ghost-btn" data-close="noballModal">Cancel</button>
     </div>
   </div>
 </div>

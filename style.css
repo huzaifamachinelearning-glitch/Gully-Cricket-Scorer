@@ -257,6 +257,7 @@ input:focus{outline:none; border-color:var(--orange);}
 }
 .status-banner p{font-size:15px; font-weight:600; margin-bottom:12px; line-height:1.4;}
 .status-banner .small-btn{margin-top:0; padding:12px;}
+#statusBannerBtn2{width:100%; margin-top:10px;}
 
 /* ================= SCORING PAD ================= */
 .pad{padding:16px; margin-top:8px;}

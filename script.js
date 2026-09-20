@@ -38,6 +38,7 @@ function defaultState(){
     battingTeamName: 'Team A',
     matchCode: null,
     isViewer: false,
+    isSuperOver: false,
     bowlingTeamName: 'Team B',
     teamARoster: [],             // plain names, set once at setup
     teamBRoster: [],
@@ -549,18 +550,29 @@ function playWide(){
   finishBall();
 }
 
-/* ---- No ball ---- */
-function playNoBall(){
+/* ---- No ball (1 extra run automatic + optional runs off the bat) ---- */
+function playNoBall(batRuns){
+  batRuns = batRuns || 0;
   if(state.matchOver || state.inningsOver){ toast('Innings/Match is over'); return; }
   pushHistory();
-  state.totalRuns += 1;
+  const striker = state.players[state.strikerIdx];
+  const total = 1 + batRuns;
+  state.totalRuns += total;
   state.extras.noball += 1;
-  state.currentOverRuns += 1;
+  state.currentOverRuns += total;
   const bs = ensureBowlerStats(state.bowlerName);
-  bs.runs += 1;
-  addBallChip('NB', 'extra');
+  bs.runs += total;
+  if(batRuns > 0){
+    striker.runs += batRuns;
+    addBallChip('NB+' + batRuns, 'extra');
+    if(batRuns === 6) playSound('six');
+    else if(batRuns === 4) playSound('four');
+  } else {
+    addBallChip('NB', 'extra');
+  }
   state.freeHit = true;
-  logEvent('No ball (+1 run) — next ball is FREE HIT');
+  logEvent('No ball (+1 run)' + (batRuns > 0 ? ' + ' + batRuns + ' run(s) off the bat' : '') + ' — next ball is FREE HIT');
+  rotateStrikeIfOdd(batRuns);
   finishBall();
 }
 
@@ -804,11 +816,36 @@ function resetToSetup(){
   showScreen('setupScreen');
 }
 
+function isTiedResult(){
+  return state.target !== null && state.totalRuns === state.target - 1;
+}
+
+function startSuperOver(){
+  state.isSuperOver = true;
+  state.oversLimit = 1;           // gully house rule: 1 over each in a Super Over
+  state.innings = 1;
+  state.target = null;
+  state.firstInningsSummary = null;
+  state.matchOver = false;
+  state.inningsOver = false;
+  state.matchFlashShown = false;
+  state.inningsFlashShown = false;
+  // battingTeamName stays as-is: the team that batted second (chased) bats first in the Super Over
+  startNextInnings();
+  logEvent('⚡ SUPER OVER begins — 1 over each side');
+  showScreen('matchScreen');
+  renderMatchScreen();
+}
+
 /* ================================================================
    RENDER — MATCH SCREEN
    ================================================================ */
 function renderMatchScreen(){
-  $('inningsTag').textContent = (state.innings === 1 ? '1st Innings' : '2nd Innings');
+  if(state.isSuperOver){
+    $('inningsTag').textContent = 'Super Over — ' + (state.innings === 1 ? '1st' : '2nd') + ' Innings';
+  } else {
+    $('inningsTag').textContent = (state.innings === 1 ? '1st Innings' : '2nd Innings');
+  }
   $('battingTeamName').textContent = state.battingTeamName;
   $('mainScore').textContent = state.totalRuns + '/' + state.wickets;
   $('mainOvers').textContent = '(' + oversStr(state.totalLegalBalls) + (state.oversLimit ? '/'+state.oversLimit : '') + ' ov)';
@@ -876,17 +913,28 @@ function renderStatusBanner(){
   const banner = $('statusBanner');
   const text = $('statusBannerText');
   const btn = $('statusBannerBtn');
+  const btn2 = $('statusBannerBtn2');
 
   if(state.matchOver){
     banner.classList.remove('hidden');
     text.textContent = matchOverText() + '  (Final: ' + state.totalRuns + '/' + state.wickets + ' in ' + oversStr(state.totalLegalBalls) + ' ov)';
-    btn.textContent = 'Start New Match';
-    btn.onclick = ()=> confirmAction('Start a new match?', 'This will clear the current match completely.', resetToSetup);
+    if(isTiedResult()){
+      btn.textContent = '⚡ Start Super Over';
+      btn.onclick = ()=> confirmAction('Start a Super Over?', '1 over each side, fresh scores — winner takes the match.', startSuperOver);
+      btn2.textContent = 'Start New Match Instead';
+      btn2.onclick = ()=> confirmAction('Start a new match?', 'This will clear the current match completely.', resetToSetup);
+      btn2.classList.remove('hidden');
+    } else {
+      btn.textContent = 'Start New Match';
+      btn.onclick = ()=> confirmAction('Start a new match?', 'This will clear the current match completely.', resetToSetup);
+      btn2.classList.add('hidden');
+    }
   } else if(state.inningsOver){
     banner.classList.remove('hidden');
     text.textContent = 'Innings complete: ' + state.totalRuns + '/' + state.wickets + ' in ' + oversStr(state.totalLegalBalls) + ' overs.';
-    btn.textContent = 'Start 2nd Innings →';
+    btn.textContent = state.isSuperOver ? 'Start 2nd Super Over Innings →' : 'Start 2nd Innings →';
     btn.onclick = ()=> confirmAction('End this innings?', 'Current score will be locked and a new innings will start.', beginSwitchInnings);
+    btn2.classList.add('hidden');
   } else {
     banner.classList.add('hidden');
   }
@@ -911,7 +959,17 @@ $('customRunConfirm').addEventListener('click', ()=>{
 });
 
 $('wideBtn').addEventListener('click', playWide);
-$('noballBtn').addEventListener('click', playNoBall);
+$('noballBtn').addEventListener('click', ()=>{
+  document.querySelectorAll('#noballRunGrid .out-type-btn').forEach(b=>b.classList.remove('selected'));
+  openModal('noballModal');
+});
+document.querySelectorAll('#noballRunGrid .out-type-btn').forEach(btn=>{
+  btn.addEventListener('click', ()=>{
+    const runs = parseInt(btn.dataset.runs, 10);
+    closeModal('noballModal');
+    playNoBall(runs);
+  });
+});
 
 $('declareBtn').addEventListener('click', ()=>{
   $('declareRunInput').value = '';
