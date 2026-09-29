@@ -33,14 +33,20 @@
     <span id="snapScore">—</span>
   </div>
   <div class="side-items">
-    <button class="side-item" data-action="new-match"><span class="side-icon">🏏</span> New Match</button>
-    <button class="side-item" data-action="players"><span class="side-icon">👥</span> Players &amp; Rename</button>
-    <button class="side-item" data-action="history"><span class="side-icon">📜</span> Match History</button>
-    <button class="side-item" data-action="scorecard"><span class="side-icon">📊</span> Full Scorecard / Share</button>
-    <button class="side-item" data-action="past-matches"><span class="side-icon">🏆</span> Past Matches</button>
+    <div class="side-section-label">During Match</div>
     <button class="side-item" data-action="switch-innings"><span class="side-icon">🔁</span> Switch / End Innings</button>
+    <button class="side-item" data-action="players"><span class="side-icon">👥</span> Players &amp; Rename</button>
+
+    <div class="side-section-label">Records</div>
+    <button class="side-item" data-action="scorecard"><span class="side-icon">📊</span> Full Scorecard / Share</button>
+    <button class="side-item" data-action="history"><span class="side-icon">📜</span> Ball-by-Ball History</button>
+    <button class="side-item" data-action="past-matches"><span class="side-icon">🏆</span> Past Matches</button>
+
+    <div class="side-section-label">Settings</div>
     <button class="side-item" id="soundToggleItem"><span class="side-icon">🔊</span> <span id="soundToggleLabel">Sound: ON</span></button>
-    <button class="side-item danger" data-action="reset"><span class="side-icon">🗑️</span> Reset Everything</button>
+
+    <div class="side-section-label">Danger Zone</div>
+    <button class="side-item danger" data-action="new-match"><span class="side-icon">🏏</span> New Match (wipes current)</button>
     <button class="side-item danger" id="stopWatchingItem" style="display:none"><span class="side-icon">🔴</span> Stop Watching</button>
   </div>
 </nav>

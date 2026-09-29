@@ -1264,7 +1264,7 @@ document.querySelectorAll('.side-item').forEach(item=>{
   item.addEventListener('click', ()=>{
     closeSideMenu();
     const action = item.dataset.action;
-    const editActions = ['new-match', 'players', 'switch-innings', 'reset'];
+    const editActions = ['new-match', 'players', 'switch-innings'];
     if(state && state.isViewer && editActions.includes(action)){
       toast('Viewer mode — sirf dekh sakte ho, score nahi kar sakte');
       return;
@@ -1289,8 +1289,6 @@ document.querySelectorAll('.side-item').forEach(item=>{
     } else if(action === 'switch-innings'){
       if(!state || !state.matchStarted){ toast('Start a match first'); return; }
       confirmAction('End this innings?', 'Current score will be locked and a new innings will start.', beginSwitchInnings);
-    } else if(action === 'reset'){
-      confirmAction('Reset everything?', 'All match data will be permanently deleted.', resetToSetup);
     }
   });
 });

@@ -106,6 +106,11 @@ h1,h2,h3{font-family:'Oswald',sans-serif; letter-spacing:0.02em;}
   content:''; position:absolute; left:0; top:0; bottom:0; width:4px; background:var(--orange);
 }
 .side-item.danger{color:var(--red);}
+.side-section-label{
+  padding:14px 20px 6px; font-size:11px; font-weight:700; letter-spacing:0.08em;
+  text-transform:uppercase; color:var(--ink-soft); opacity:0.75;
+}
+.side-section-label:first-child{padding-top:10px;}
 
 /* ================= SCREENS ================= */
 .screen{display:none; min-height:100vh; padding-bottom:30px;}
