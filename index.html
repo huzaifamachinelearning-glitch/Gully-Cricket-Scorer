@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <meta name="theme-color" content="#FF6A2B">
 <link rel="manifest" href="manifest.json">
-<link rel="apple-touch-icon" href="icon.svg">
-<link rel="icon" href="icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/icon.svg">
+<link rel="icon" href="assets/icon.svg" type="image/svg+xml">
 <title>Gully Score — Cricket Scorer</title>
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="assets/style.css">
 </head>
 <body>
 
@@ -34,7 +34,7 @@
   </div>
   <div class="side-items">
     <div class="side-section-label">During Match</div>
-    <button class="side-item" data-action="switch-innings"><span class="side-icon">🔁</span> Switch / End Innings</button>
+    <button class="side-item" data-action="switch-innings"><span class="side-icon">🔁</span> Start Next Innings</button>
     <button class="side-item" data-action="players"><span class="side-icon">👥</span> Players &amp; Rename</button>
 
     <div class="side-section-label">Records</div>
@@ -71,11 +71,11 @@
 
     <label class="field-label">Overs <span class="required-tag">Required</span></label>
     <input id="oversLimit" type="number" min="1" placeholder="e.g. 6 or 10" required>
-    <p class="field-hint">Match aur innings automatically overs pure hone par khatam hoga — is liye ye zaroori hai.</p>
+    <p class="field-hint">The match and each innings will end automatically once the overs are used up — that's why this is required.</p>
 
     <button id="startMatchBtn" class="primary-btn">Next: Toss →</button>
 
-    <button id="watchMatchBtn" class="ghost-btn-full" type="button">👀 Ya ek live match dekho</button>
+    <button id="watchMatchBtn" class="ghost-btn-full" type="button">👀 Or watch a live match</button>
   </div>
 </section>
 
@@ -83,21 +83,45 @@
 <section id="tossScreen" class="screen">
   <div class="card">
     <h1>Who Bats First?</h1>
-    <p class="field-hint">Toss jeetne wali team chuno jo pehle batting karegi.</p>
+    <p class="field-hint">Choose the team that will bat first.</p>
     <button id="tossTeamABtn" class="toss-btn"></button>
     <button id="tossTeamBBtn" class="toss-btn"></button>
     <button class="back-btn-text" data-back="setupScreen">← Back</button>
   </div>
 </section>
 
-<!-- ===================== SCREEN 2: PLAYER LIST ===================== -->
+<!-- ===================== SCREEN 2: PLAYER LIST (roster entry + mid-match rename) ===================== -->
 <section id="playerScreen" class="screen">
   <div class="screen-header">
     <button id="playerBackBtn" class="back-btn">←</button>
     <h2 id="playerScreenTitle">Players</h2>
   </div>
+  <div id="renameTabs" class="rename-tabs hidden">
+    <button class="rename-tab active" data-team="batting">Batting: <span id="battingTabName"></span></button>
+    <button class="rename-tab" data-team="bowling">Bowling: <span id="bowlingTabName"></span></button>
+  </div>
   <div id="playerListWrap" class="player-list"></div>
   <button id="playersDoneBtn" class="primary-btn sticky-bottom">Done — Go to Scoring →</button>
+</section>
+
+<!-- ===================== SCREEN 2B: OPENING SELECTION ===================== -->
+<section id="openingScreen" class="screen">
+  <div class="screen-header">
+    <h2 id="openingTitle">Who's Opening?</h2>
+  </div>
+  <div class="opening-section">
+    <div class="opening-team-label" id="openingBattingTeamLabel">Team A (batting)</div>
+    <p class="field-label">Striker</p>
+    <div id="openingStrikerList" class="next-bat-list"></div>
+    <p class="field-label">Non-Striker</p>
+    <div id="openingNonStrikerList" class="next-bat-list"></div>
+  </div>
+  <div class="opening-section">
+    <div class="opening-team-label" id="openingBowlingTeamLabel">Team B (bowling)</div>
+    <p class="field-label">Opening Bowler</p>
+    <div id="openingBowlerList" class="next-bat-list"></div>
+  </div>
+  <button id="openingConfirmBtn" class="primary-btn sticky-bottom" disabled>Start Innings →</button>
 </section>
 
 <!-- ===================== SCREEN 3: MAIN SCORING ===================== -->
@@ -208,7 +232,7 @@
 <div id="noballModal" class="modal-overlay hidden">
   <div class="modal">
     <h3>No Ball</h3>
-    <p class="modal-hint">+1 run add hoga automatically. Bat se kitne runs bhi lage?</p>
+    <p class="modal-hint">+1 run is added automatically. How many runs off the bat too?</p>
     <div class="out-type-grid" id="noballRunGrid">
       <button class="out-type-btn" data-runs="0">0 (only NB)</button>
       <button class="out-type-btn" data-runs="1">1</button>
@@ -271,6 +295,7 @@
 <div id="bowlerModal" class="modal-overlay hidden">
   <div class="modal modal-tall">
     <h3>Select Bowler</h3>
+    <p id="bowlerModalHint" class="modal-hint hidden"></p>
     <div id="bowlerChoiceList" class="next-bat-list"></div>
     <label class="field-label">Or type a name (substitute)</label>
     <input id="bowlerNameInput" type="text" placeholder="Enter bowler name">
@@ -320,7 +345,7 @@
 <div id="watchCodeModal" class="modal-overlay hidden">
   <div class="modal">
     <h3>Watch a Live Match</h3>
-    <p class="modal-hint">Scorer se match code lo aur yaha daalo.</p>
+    <p class="modal-hint">Get the match code from the scorer and enter it here.</p>
     <input id="watchCodeInput" type="text" placeholder="e.g. GULLY7X" style="text-transform:uppercase">
     <div class="modal-actions">
       <button class="ghost-btn" data-close="watchCodeModal">Cancel</button>
@@ -368,8 +393,21 @@
 <!-- ===================== TOAST ===================== -->
 <div id="toast" class="toast hidden"></div>
 
+<!-- External libraries -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
-<script src="script.js"></script>
+
+<!-- App modules — load order matters (classic scripts share one global scope) -->
+<script src="js/cloud/config.js"></script>
+<script src="js/cloud/sync.js"></script>
+<script src="js/state/state.js"></script>
+<script src="js/features/sound.js"></script>
+<script src="js/screens/roster-setup.js"></script>
+<script src="js/screens/opening-selection.js"></script>
+<script src="js/engine/scoring-engine.js"></script>
+<script src="js/engine/over-transition.js"></script>
+<script src="js/features/player-management.js"></script>
+<script src="js/ui/render.js"></script>
+<script src="js/ui/main.js"></script>
 </body>
 </html>

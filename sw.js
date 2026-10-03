@@ -1,11 +1,21 @@
-const CACHE_NAME = 'gullyscore-cache-v1';
+const CACHE_NAME = 'gullyscore-cache-v2';
 const ASSETS = [
   './',
   './index.html',
-  './style.css',
-  './script.js',
+  './assets/style.css',
+  './assets/icon.svg',
   './manifest.json',
-  './icon.svg'
+  './js/cloud/config.js',
+  './js/cloud/sync.js',
+  './js/state/state.js',
+  './js/features/sound.js',
+  './js/screens/roster-setup.js',
+  './js/screens/opening-selection.js',
+  './js/engine/scoring-engine.js',
+  './js/engine/over-transition.js',
+  './js/features/player-management.js',
+  './js/ui/render.js',
+  './js/ui/main.js'
 ];
 
 self.addEventListener('install', (e)=>{

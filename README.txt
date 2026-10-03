@@ -64,3 +64,42 @@ NOTES
 - Live watching and cloud backup need internet. Everything else (scoring, undo, scorecard, offline PWA mode) works fully offline.
 
 Bas ek baar setup karo, phir har ball pe tap karke score continue karo. Ladai khatam! 🏏
+
+
+
+
+
+gully-cricket-scorer/
+│
+├── index.html
+├── manifest.json
+├── sw.js
+├── README.txt
+│
+├── assets/
+│   ├── style.css
+│   └── icon.svg
+│
+└── js/
+    ├── cloud/
+    │   ├── config.js              → Supabase keys, constants, $ / toast / modal helpers
+    │   └── sync.js                 → push-to-cloud backup, live viewer join, realtime
+    │
+    ├── state/
+    │   └── state.js                 → defaultState(), save/load, undo stack
+    │
+    ├── screens/
+    │   ├── roster-setup.js         → Setup, Toss, dono teams ke players enter
+    │   └── opening-selection.js    → striker / non-striker / opening bowler pick
+    │
+    ├── engine/
+    │   ├── scoring-engine.js       → saare cricket rules (runs, wide, no-ball, out, Super Over)
+    │   └── over-transition.js      → har over ke baad naya bowler poochna
+    │
+    ├── features/
+    │   ├── player-management.js    → mid-match rename (dono teams, tabs se)
+    │   └── sound.js                 → sound effects
+    │
+    └── ui/
+        ├── render.js                → screen pe jo bhi dikhta hai, sab yaha
+        └── main.js                   → baaki sab button clicks + app start (SABSE LAST load hota hai)
